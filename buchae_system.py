@@ -66,6 +66,16 @@ def get_balance(user_id):
     return get_or_create_user(user_id)["buchae"]
 
 
+def grant_buchae(user_id, n):
+    """개발/테스트용: 부채를 직접 지급."""
+    get_or_create_user(user_id)
+    with _LOCK:
+        db = _load()
+        db["users"][user_id]["buchae"] += int(n)
+        _save(db)
+        return db["users"][user_id]["buchae"]
+
+
 def charge_buchae(user_id, package_key, paid=False):
     """
     부채 충전. 지금은 paid=True를 '결제 성공했다 치고' 처리.

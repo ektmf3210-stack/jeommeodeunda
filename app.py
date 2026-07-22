@@ -25,7 +25,7 @@ from report_prompt import (make_full_prompt, make_followup_prompt, make_naming_p
 from report_generator import FIELDS
 from qimen_llm import generate_interpretation, stream_interpretation
 from buchae_system import (get_balance, open_report, charge_buchae,
-                           can_open, BUCHAE_PACKAGES, get_or_create_user)
+                           can_open, BUCHAE_PACKAGES, get_or_create_user, grant_buchae)
 
 app = Flask(__name__)
 
@@ -461,6 +461,34 @@ def index():
 @app.route("/char/<path:fn>")
 def char(fn):
     return send_from_directory("characters", fn)
+
+
+@app.route("/dev")
+def dev_topup():
+    """개발용 부채 충전. 예: /dev?code=비밀코드&n=20  (결제 없이 테스트)."""
+    from flask import make_response
+    code = request.args.get("code", "")
+    secret = os.environ.get("DEV_CODE", "jeom2026-gongmyeong")
+    if code != secret:
+        return "🔒 코드가 틀렸어", 403
+    try:
+        n = min(int(request.args.get("n", 20)), 200)
+    except Exception:
+        n = 20
+    uid = current_user()
+    set_ck = None
+    if not uid:
+        uid = "guest_" + uuid.uuid4().hex[:10]
+        set_ck = uid
+    bal = grant_buchae(uid, n)
+    resp = make_response(
+        f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<div style='font-family:sans-serif;padding:40px;text-align:center'>"
+        f"<h2>🪭 부채 {n}개 충전 완료</h2><p>현재 잔액: <b>{bal}개</b></p>"
+        f"<p><a href='/'>홈으로 가서 작명/분석 눌러보기 →</a></p></div>")
+    if set_ck:
+        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
 
 
 @app.route("/api/report", methods=["POST"])

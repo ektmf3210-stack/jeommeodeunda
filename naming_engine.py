@@ -7,9 +7,10 @@
 점수화해 상위 후보 반환 + 순한글 이름 추천.
 계산은 전부 코드가 확정(할루시네이션 없음). 설명 문장만 LLM이 붙임.
 """
+import random
 from datetime import datetime
 from suri import four_gyeok
-from hanja_db import SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong
+from hanja_db import SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong, gender_ok
 from saju_engine import compute_saju
 
 KR2HANJA = {"목": "木", "화": "火", "토": "土", "금": "金", "수": "水"}
@@ -58,21 +59,30 @@ def _flatten():
     return out
 
 
-def _eum_flow_score(s_oh, o1, o2):
-    """발음오행 흐름 점수. 상극 있으면 None(제외)."""
-    score = 0
-    for a, b in [(s_oh, o1), (o1, o2)]:
-        if not a or not b:
-            continue
-        if SANGGEUK.get(a) == b:      # 상극
-            return None
-        if SANGSAENG.get(a) == b:     # 상생
-            score += 2
-        elif a == b:                  # 상비(같은 오행)
-            score += 1
-        else:                         # 역생 등
-            score += 0
-    return score
+def _rel(a, b):
+    """발음오행 두 글자 관계 점수 (상극은 양방향으로 감점)."""
+    if not a or not b:
+        return 0
+    if SANGGEUK.get(a) == b or SANGGEUK.get(b) == a:   # 상극(서로 극)
+        return -6
+    if SANGSAENG.get(a) == b:                          # 상생(정방향)
+        return 3
+    if SANGSAENG.get(b) == a:                          # 역생(약한 생)
+        return 1
+    if a == b:                                         # 상비(같은 오행)
+        return 1
+    return 0
+
+
+def _flow(oh_list):
+    """성-이름1-이름2 발음오행 흐름 -> (총점, 상극있음)."""
+    total, geuk = 0, False
+    for a, b in zip(oh_list, oh_list[1:]):
+        s = _rel(a, b)
+        total += s
+        if s < 0:
+            geuk = True
+    return total, geuk
 
 
 def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None):
@@ -89,51 +99,57 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None):
     wx = saju["오행분포"]
     need = set(_need_ohaeng(wx))                # 부족오행(한자)
 
-    pool = _flatten()
+    want = "F" if gender in ("F", "여", "여아") else "M"
+    pool = [p for p in _flatten() if gender_ok(p[0], want)]   # 성별 어울리는 음절만
     cands = []
     for (e1, h1, hun1, hk1, oh1) in pool:
+        eo1 = eum_ohaeng(e1)                     # 이름1 발음오행
         for (e2, h2, hun2, hk2, oh2) in pool:
             if e1 == e2:                         # 같은 음 반복 제외
-                continue
-            flow = _eum_flow_score(s_oh, oh1, oh2)
-            if flow is None:                     # 발음 상극 제외
                 continue
             fg = four_gyeok(s_hoek, [hk1, hk2])
             if not fg["_모두길"]:                # 사격 전부 길 필수
                 continue
-            bo = [o for o in (oh1, oh2) if o in need]
-            score = flow * 2 + len(bo) * 4
-            # 등급 가중 (최상/상)
+            eo2 = eum_ohaeng(e2)
+            flow, geuk = _flow([s_oh, eo1, eo2])  # 발음오행 흐름(초성 기준)
+            bo = [o for o in (oh1, oh2) if o in need]   # 자원오행 보완
+            score = flow + len(bo) * 5
             for k in ("원격", "형격", "이격", "정격"):
-                g = fg[k]["등급"]
-                score += 3 if g == "최상" else (2 if g == "상" else 1)
+                gr = fg[k]["등급"]
+                score += 3 if gr == "최상" else (2 if gr == "상" else 1)
             cands.append({
                 "이름": e1 + e2, "한자": h1 + h2, "훈": [hun1, hun2],
                 "획수": [hk1, hk2], "자원오행": [oh1, oh2],
-                "발음오행": [s_oh, oh1, oh2], "보완오행": bo,
+                "발음오행": [s_oh, eo1, eo2], "보완오행": bo, "_geuk": geuk,
                 "사격": {k: {"수": fg[k]["수"], "등급": fg[k]["등급"], "격": fg[k]["격"]}
                         for k in ("원격", "형격", "이격", "정격")},
                 "_score": score,
             })
-    # 중복 이름(한글) 제거하며 상위 선별
+    # 미러 이름(영우/우영) 및 중복 제거, 점수순
     cands.sort(key=lambda c: c["_score"], reverse=True)
-    seen, picked = set(), []
+    seen, uniq = set(), []
     for c in cands:
-        if c["이름"] in seen:
+        key = frozenset(c["한자"])
+        if key in seen:
             continue
-        seen.add(c["이름"])
-        picked.append(c)
-        if len(picked) >= top:
-            break
+        seen.add(key)
+        uniq.append(c)
+    # 상위 풀에서 랜덤 추출 → 재구매 시 매번 다른 이름 (사격은 모두 길이라 품질 동일)
+    top_pool = uniq[:max(top * 4, 24)]
+    random.shuffle(top_pool)
+    picked = top_pool[:top]
+    picked.sort(key=lambda c: c["_score"], reverse=True)
 
-    # 순한글 후보 (발음 상극 없는 것)
+    # 순한글 후보 (발음 상극 없는 것), 매번 섞어서 다양하게
     sun = []
     for (nm, meaning) in SUNHANGEUL:
         o1, o2 = eum_ohaeng(nm[0]), eum_ohaeng(nm[-1])
-        if _eum_flow_score(s_oh, o1, o2) is None:
+        _f, geuk = _flow([s_oh, o1, o2])
+        if geuk:
             continue
         sun.append({"이름": nm, "뜻": meaning, "발음오행": [s_oh, o1, o2]})
-    sun = sun[:6]
+    random.shuffle(sun)
+    sun = sun[:5]
 
     return {
         "성": {"한글": seong_kr, "한자": s_hj, "획수": s_hoek, "발음오행": s_oh},
