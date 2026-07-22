@@ -175,21 +175,22 @@ const MSG=[
  "네 인생도 똑같아. 언제·어디로 움직일지 그 <em>'때'</em>를 내가 봐줄게 😉"
 ];
 const chat=document.getElementById('chat');
-let mi=0;
-function typing(){const t=document.createElement('div');t.className='row';t.id='typing';
+let mi=0, introLeft=false;
+function typing(){if(introLeft)return;const t=document.createElement('div');t.className='row';t.id='typing';
   t.innerHTML='<img class="av" src="/char/gongmyeong.png"><div class="tb"><span></span><span></span><span></span></div>';
   chat.appendChild(t);t.classList.add('show');scrollTo(0,document.body.scrollHeight);}
-function nextMsg(){const t=document.getElementById('typing');if(t)t.remove();
+function nextMsg(){if(introLeft)return;const t=document.getElementById('typing');if(t)t.remove();
   if(mi>=MSG.length){document.getElementById('ctaw').classList.add('show');return;}
   const r=document.createElement('div');r.className='row';
   r.innerHTML='<img class="av" src="/char/gongmyeong.png"><div class="bub">'+MSG[mi]+'</div>';
   chat.appendChild(r);requestAnimationFrame(()=>r.classList.add('show'));scrollTo(0,document.body.scrollHeight);mi++;
-  setTimeout(()=>{typing();setTimeout(nextMsg,1100);},Math.min(1500,700+MSG[mi-1].replace(/<[^>]+>/g,'').length*22));}
-setTimeout(()=>{typing();setTimeout(nextMsg,900);},500);
+  setTimeout(()=>{if(introLeft)return;typing();setTimeout(nextMsg,1100);},Math.min(1500,700+MSG[mi-1].replace(/<[^>]+>/g,'').length*22));}
+setTimeout(()=>{if(introLeft)return;typing();setTimeout(nextMsg,900);},500);
 
 /* ── 화면 전환 ── */
-function toInput(){document.getElementById('s-intro').classList.remove('on');
-  document.getElementById('ctaw').classList.remove('show');
+function toInput(){introLeft=true;
+  document.getElementById('s-intro').classList.remove('on');
+  const cw=document.getElementById('ctaw');cw.classList.remove('show');cw.style.display='none';
   document.getElementById('s-input').classList.add('on');scrollTo(0,0);refreshBal();}
 
 /* ── 입력 폼 ── */
