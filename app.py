@@ -232,8 +232,8 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   <div class="namebox" style="background:linear-gradient(135deg,#eef6ff,#f6f0ff)">
     <div class="nbtitle">🔎 내 이름 분석 <span class="nbtag" style="background:var(--blue)">성명 감정 · 부채 2개</span></div>
     <div class="nbsub">지금 내 이름, 잘 지어졌을까? 발음오행 흐름·사주 궁합·획수운(사격)으로 장단점 진단해줄게</div>
-    <label>이름 (한글, 예: 김다슬)</label>
-    <input type="text" id="aname" maxlength="5" placeholder="김다슬">
+    <label>이름 (한글, 예: 홍길동)</label>
+    <input type="text" id="aname" maxlength="5" placeholder="홍길동">
     <label>이름 한자 (알면 입력, 몰라도 OK)</label>
     <input type="text" id="ahanja" maxlength="5" placeholder="예: 金瑞娟 · 모르면 비워둬">
     <label>태어난 날 (양력) · 시간 모르면 비워둬도 돼</label>
