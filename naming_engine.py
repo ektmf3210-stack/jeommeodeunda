@@ -10,7 +10,7 @@
 import random
 from datetime import datetime
 from suri import four_gyeok, four_gyeok_single
-from hanja_db import SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong, gender_ok
+from hanja_db import SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong, gender_ok, ending_ok
 from saju_engine import compute_saju
 
 KR2HANJA = {"목": "木", "화": "火", "토": "土", "금": "金", "수": "水"}
@@ -63,10 +63,10 @@ def _rel(a, b):
     """발음오행 두 글자 관계 점수 (상극은 양방향으로 감점)."""
     if not a or not b:
         return 0
-    if SANGGEUK.get(a) == b or SANGGEUK.get(b) == a:   # 상극(서로 극)
-        return -6
+    if SANGGEUK.get(a) == b or SANGGEUK.get(b) == a:   # 상극(서로 극) — 약하게 감점
+        return -2
     if SANGSAENG.get(a) == b:                          # 상생(정방향)
-        return 3
+        return 2
     if SANGSAENG.get(b) == a:                          # 역생(약한 생)
         return 1
     if a == b:                                         # 상비(같은 오행)
@@ -130,9 +130,12 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
         return {"error": f"'{fixed}'는 아직 이름 한자 DB에 없어. 다른 글자로 해줄래?"}
 
     cands = []
+    # 끝 글자(외자면 그 글자, 두자면 뒷글자)는 여아 어미 규칙 적용
+    end_pool = [p for p in pool if ending_ok(p[0], want)]
+
     if single:
-        # ── 외자(홑이름): 이름 한 글자 ──
-        src = fixed_entries if fixed_entries else pool
+        # ── 외자(홑이름): 이름 한 글자 (끝 글자 규칙 적용) ──
+        src = fixed_entries if fixed_entries else end_pool
         for (e1, h1, hun1, hk1, oh1) in src:
             fg = four_gyeok_single(s_hoek, hk1)
             if not fg["_모두길"]:
@@ -151,11 +154,11 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
     else:
         # ── 두 글자: fixed_pos(1/2)에 고정, 나머지 자유 ──
         pos1 = fixed_entries if (fixed and fixed_pos == 1) else pool
-        pos2 = fixed_entries if (fixed and fixed_pos == 2) else pool
+        pos2 = fixed_entries if (fixed and fixed_pos == 2) else end_pool
         for (e1, h1, hun1, hk1, oh1) in pos1:
             eo1 = eum_ohaeng(e1)
             for (e2, h2, hun2, hk2, oh2) in pos2:
-                if e1 == e2 and h1 == h2:
+                if e1 == e2:            # 겹소리(민민 등) 제외
                     continue
                 fg = four_gyeok(s_hoek, [hk1, hk2])
                 if not fg["_모두길"]:
