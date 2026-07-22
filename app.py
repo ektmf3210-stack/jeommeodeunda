@@ -121,7 +121,13 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .btn2{width:100%;padding:14px;border:3px solid var(--navy);border-radius:15px;background:var(--blue);color:#fff;font-family:'Black Han Sans';font-size:16px;box-shadow:3px 4px 0 var(--yellow);cursor:pointer}
 .rpt{padding:17px;white-space:pre-wrap;line-height:1.95;font-size:14.5px;color:#2e2148}.rpt b{color:var(--pink)}
 .tagf{padding:0 17px 15px;font-size:10.5px;color:#a99acb;font-family:'Jua'}
-.namebox{margin:18px 0 6px;padding:16px;background:linear-gradient(135deg,#fff6fb,#eef3ff);border:2.5px solid var(--navy);border-radius:18px;box-shadow:4px 4px 0 var(--purple)}
+.secdiv{display:flex;align-items:center;gap:10px;margin:26px 2px 12px;color:var(--navy)}
+.secdiv:before,.secdiv:after{content:"";flex:1;height:3px;background:repeating-linear-gradient(90deg,var(--navy) 0 7px,transparent 7px 12px)}
+.secdiv span{font-family:'Black Han Sans';font-size:16px;white-space:nowrap}
+.nmenu{display:flex;gap:7px;margin-bottom:6px}
+.nmb{flex:1;border:2.5px solid var(--navy);border-radius:13px;background:#fff;font-family:'Jua';font-size:13.5px;padding:10px 0;cursor:pointer;box-shadow:2px 2px 0 #cfd8ff}
+.nmb.on{background:var(--pink);color:#fff;box-shadow:2px 2px 0 var(--navy)}
+.namebox{margin:8px 0 6px;padding:16px;background:linear-gradient(135deg,#fff6fb,#eef3ff);border:2.5px solid var(--navy);border-radius:18px;box-shadow:4px 4px 0 var(--purple)}
 .nbtitle{font-family:'Black Han Sans';font-size:17px}
 .nbtag{font-family:'Jua';font-size:11px;color:#fff;background:var(--navy);padding:2px 8px;border-radius:10px;margin-left:4px;white-space:nowrap}
 .nbsub{font-family:'Jua';font-size:12px;color:#7a6b95;margin:6px 0 10px;line-height:1.5}
@@ -187,6 +193,13 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
   <div class="spin" id="spin">🪭 공명이가 부채를 펼치는 중…</div>
   <div id="result"></div>
+  <div class="secdiv"><span>🎏 이름 서비스</span></div>
+  <div class="nmenu">
+    <button class="nmb on" id="nmbN" onclick="nameMenu('naming')">✍️ 작명</button>
+    <button class="nmb" id="nmbA" onclick="nameMenu('analyze')">🔎 이름분석</button>
+    <button class="nmb" id="nmbP" onclick="nameMenu('pop')">🏆 인기순위</button>
+  </div>
+  <div id="panel-naming">
   <div class="namebox">
     <div class="nbtitle">🎏 아이 이름 짓기 <span class="nbtag">정통 수리성명학 · 부채 5개</span></div>
     <div class="nbsub">아기 사주로 부족한 기운을 찾아, 사격(초년·청년·장년·말년운)이 다 좋은 이름만 골라줘</div>
@@ -214,6 +227,8 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
   <div class="spin" id="nspin">🎏 공명이가 획수를 세는 중…</div>
   <div id="nresult"></div>
+  </div>
+  <div id="panel-analyze" style="display:none">
   <div class="namebox" style="background:linear-gradient(135deg,#eef6ff,#f6f0ff)">
     <div class="nbtitle">🔎 내 이름 분석 <span class="nbtag" style="background:var(--blue)">성명 감정 · 부채 2개</span></div>
     <div class="nbsub">지금 내 이름, 잘 지어졌을까? 발음오행 흐름·사주 궁합·획수운(사격)으로 장단점 진단해줄게</div>
@@ -229,11 +244,14 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
   <div class="spin" id="aspin">🔎 공명이가 획수를 세는 중…</div>
   <div id="aresult"></div>
+  </div>
+  <div id="panel-pop" style="display:none">
   <div class="namebox" style="background:linear-gradient(135deg,#fffdf0,#fff2f8)">
-    <div class="nbtitle">🏆 요즘 인기 이름 순위 <span class="nbtag" style="background:var(--yellow);color:var(--navy)">무료</span></div>
-    <div class="nbsub">대법원 출생신고 통계 기준 · 작명 트렌드 참고용</div>
+    <div class="nbtitle">🏆 인기 이름 순위 <span class="nbtag" style="background:var(--yellow);color:var(--navy)">무료</span></div>
+    <div class="nbsub" id="popsub">대법원 출생신고 통계 · 작명 트렌드 참고용</div>
     <div class="pkgbtns"><button class="tabb on" id="tabB" onclick="popTab('남아')">👦 남아</button><button class="tabb" id="tabG" onclick="popTab('여아')">👧 여아</button></div>
     <div id="poplist"><div class="nmean">불러오는 중…</div></div>
+  </div>
   </div>
   <p class="foot">전통 술수 기반 참고·오락용 · 계산은 검증된 엔진, 해석은 AI<br>중요한 결정은 본인 판단으로!</p>
 </section>
@@ -420,9 +438,19 @@ async function streamNaming(q,balance){
   }catch(e){rpt.innerHTML=txt+'<br>(풀이 전송이 끊겼어)';}
   tagf.textContent='🎏 정통 수리성명학 · 남은 부채 '+balance+'개';
 }
+function nameMenu(which){
+  const map={naming:'nmbN',analyze:'nmbA',pop:'nmbP'};
+  ['naming','analyze','pop'].forEach(k=>{
+    document.getElementById('panel-'+k).style.display=(k===which)?'block':'none';
+    document.getElementById(map[k]).classList.toggle('on',k===which);
+  });
+  if(which==='pop')loadPop();
+}
 let POP=null;
 async function loadPop(){
   if(!POP){try{POP=await(await fetch('/api/popular')).json();}catch(e){return;}}
+  const sub=document.getElementById('popsub');
+  if(sub)sub.innerHTML='<b>'+POP.year+'년 기준</b> · 대법원 출생신고 순위 · '+(POP.note||'');
   popTab('남아');
 }
 function popTab(g){
@@ -430,8 +458,8 @@ function popTab(g){
   document.getElementById('tabB').classList.toggle('on',g==='남아');
   document.getElementById('tabG').classList.toggle('on',g==='여아');
   const list=POP[g]||[];
-  let h='<div class="poprow" style="font-weight:900;color:#9a8">'+ (POP.trend?POP.trend[g]:'') +'</div><div class="popgrid">';
-  list.forEach(x=>{h+='<div class="popitem"><span class="pr">'+x.순위+'</span> <b>'+x.이름+'</b> <span class="pp">'+x.비율+'%</span></div>';});
+  let h='<div class="poprow" style="font-weight:900;color:#b08">'+ (POP.trend?POP.trend[g]:'') +'</div><div class="popgrid">';
+  list.forEach(x=>{h+='<div class="popitem"><span class="pr">'+x.순위+'</span> <b>'+x.이름+'</b></div>';});
   h+='</div><div class="poprc">'+POP.source+'</div>';
   document.getElementById('poplist').innerHTML=h;
 }
