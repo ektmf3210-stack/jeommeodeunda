@@ -168,6 +168,46 @@ def build_naming_prompt(result):
         "이제 공명이가 되어 작명 해설을 써주세요.")
 
 
+def build_analysis_prompt(r):
+    """이름 분석 결과(dict) -> 공명이 장단점 감정하는 프롬프트."""
+    eum = r["발음오행"]; sj = r["사주"]
+    flowtxt = " ".join(f"{f['a']}{f['rel']}{f['b']}" for f in eum["흐름"])
+    suri = r.get("수리")
+    suritxt = "한자 미입력(수리 분석 생략)"
+    if suri and "미지원" in suri:
+        suritxt = "한자를 넣었지만 일부 글자가 DB에 없어 수리는 생략"
+    elif suri:
+        gg = ", ".join(f"{k} {v['수']}수 {v['등급']}({v['격']})"
+                       for k, v in suri["사격"].items())
+        suritxt = f"한자 {suri['한자']} 획수 {suri['획수']} / 사격: {gg} / 모두길:{suri['모두길']}"
+    facts = (f"[이름] {r['이름']} (성 {r['성']}, 이름 {r['이름자']})\n"
+             f"[발음오행 흐름] {'/'.join(eum['배열'])} → {flowtxt} → 판정 '{eum['등급']}'\n"
+             f"[사주] 일간 {sj['일간']}({sj['일간오행']}), 부족오행 {', '.join(sj['부족오행']) or '없음'}, "
+             f"이름이 채운 부족오행 {', '.join(sj['이름이채운오행']) or '없음'}, 궁합 '{sj['궁합']}'\n"
+             f"[수리] {suritxt}\n"
+             f"[장점] {'; '.join(r['장점']) or '뚜렷한 장점 항목 없음'}\n"
+             f"[단점] {'; '.join(r['단점']) or '뚜렷한 단점 없음'}")
+    return (
+        "당신은 '공명'(꼬마 제갈량) 캐릭터입니다. 아래는 코드가 성명학으로 확정한 '이름 감정 결과'예요.\n"
+        "이 사실만 바탕으로, 이 사람의 현재 이름이 잘 지어졌는지 장점과 단점을 솔직하고 다정하게 풀어주세요.\n\n"
+        f"{facts}\n\n"
+        "[작성 규칙]\n"
+        "1. 발음오행 흐름이 뭔지 쉽게 설명(어려운 말엔 '쉽게 말하면~' 비유). 상생은 기운이 잘 흐르는 것, 상극은 부딪히는 것.\n"
+        "2. 먼저 장점을 진심으로 짚어주고(좋은 이름이면 확실히 좋다고), 그다음 아쉬운 점을 솔직하게. 단, 겁주지 말고 담담하게.\n"
+        "3. 사주에 부족한 기운을 이름이 채우는지도 설명.\n"
+        "4. 만약 아쉬운 점이 있으면, 마지막에 '이름은 바꿀 수도 있고(개명), 아이라면 작명으로 보완할 수 있다'고 부드럽게 안내. 이름이 이미 좋으면 굳이 권하지 말고 축하해줄 것.\n"
+        "5. 엠대시(—) 쓰지 말 것. 다정한 존댓말. 1,500~2,500자.\n\n"
+        "이제 공명이가 되어 이름 감정을 써주세요.")
+
+
+def make_analysis_prompt(fullname, dt_birth, gender, hanja=None):
+    from name_analysis import analyze_name
+    r = analyze_name(fullname, dt_birth, gender, hanja=hanja)
+    if "error" in r:
+        return None, r
+    return build_analysis_prompt(r), r
+
+
 def make_naming_prompt(seong_kr, dt_birth, gender, seong_hanja=None):
     from naming_engine import generate_names
     result = generate_names(seong_kr, dt_birth, gender, seong_hanja=seong_hanja)

@@ -30,6 +30,7 @@ BUCHAE_PACKAGES = {
 FIELD_COST = {
     "wealth": 1, "career": 1, "love": 1, "life": 1, "overall": 1, "health": 1,
     "yearly": 1, "followup": 1, "naming": 5,   # 작명은 프리미엄 5부채(2,500원)
+    "analysis": 2,   # 이름 분석(감정)은 2부채(1,000원)
 }
 FREE_DAILY = "today"       # 오늘의 운세는 무료
 NEW_USER_FREE_BUCHAE = 1   # 신규 가입 시 부채 1개 증정(첫 리포트 무료 체험)

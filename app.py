@@ -20,7 +20,8 @@ from datetime import datetime
 from flask import (Flask, request, jsonify, render_template_string,
                    send_from_directory, redirect, Response, stream_with_context)
 
-from report_prompt import make_full_prompt, make_followup_prompt, make_naming_prompt, build_naming_prompt
+from report_prompt import (make_full_prompt, make_followup_prompt, make_naming_prompt,
+                           build_naming_prompt, make_analysis_prompt)
 from report_generator import FIELDS
 from qimen_llm import generate_interpretation, stream_interpretation
 from buchae_system import (get_balance, open_report, charge_buchae,
@@ -194,6 +195,21 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
   <div class="spin" id="nspin">🎏 공명이가 획수를 세는 중…</div>
   <div id="nresult"></div>
+  <div class="namebox" style="background:linear-gradient(135deg,#eef6ff,#f6f0ff)">
+    <div class="nbtitle">🔎 내 이름 분석 <span class="nbtag" style="background:var(--blue)">성명 감정 · 부채 2개</span></div>
+    <div class="nbsub">지금 내 이름, 잘 지어졌을까? 발음오행 흐름·사주 궁합·획수운(사격)으로 장단점 진단해줄게</div>
+    <label>이름 (한글, 예: 김다슬)</label>
+    <input type="text" id="aname" maxlength="5" placeholder="김다슬">
+    <label>이름 한자 (알면 입력, 몰라도 OK)</label>
+    <input type="text" id="ahanja" maxlength="5" placeholder="예: 金瑞娟 · 모르면 비워둬">
+    <label>태어난 날 (양력) · 시간 모르면 비워둬도 돼</label>
+    <div class="rowf"><div><input type="date" id="adate"></div><div><input type="time" id="atime"></div></div>
+    <label>성별</label>
+    <select id="agender"><option value="F">여성</option><option value="M">남성</option></select>
+    <button class="go" style="background:var(--blue)" onclick="runAnalyze()">🔎 내 이름 진단</button>
+  </div>
+  <div class="spin" id="aspin">🔎 공명이가 획수를 세는 중…</div>
+  <div id="aresult"></div>
   <p class="foot">전통 술수 기반 참고·오락용 · 계산은 검증된 엔진, 해석은 AI<br>중요한 결정은 본인 판단으로!</p>
 </section>
 
@@ -361,6 +377,54 @@ async function streamNaming(q,balance){
   }catch(e){rpt.innerHTML=txt+'<br>(풀이 전송이 끊겼어)';}
   tagf.textContent='🎏 정통 수리성명학 · 남은 부채 '+balance+'개';
 }
+async function runAnalyze(){
+  const name=document.getElementById('aname').value.trim();
+  const hanja=document.getElementById('ahanja').value.trim();
+  const date=document.getElementById('adate').value,time=document.getElementById('atime').value||'12:00';
+  const gender=document.getElementById('agender').value;
+  if(!name){alert('이름을 한글로 넣어줘 (예: 김다슬)');return;}
+  if(!date){alert('태어난 날을 넣어줘~');return;}
+  document.getElementById('aspin').style.display='block';document.getElementById('aresult').innerHTML='';
+  let d;
+  try{d=await(await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,hanja,date,time,gender})})).json();}
+  catch(e){document.getElementById('aspin').style.display='none';document.getElementById('aresult').innerHTML='<div class="ncard">오류가 났어. 다시 해줄래?</div>';return;}
+  document.getElementById('aspin').style.display='none';
+  if(d.error){document.getElementById('aresult').innerHTML='<div class="ncard">'+d.error+'</div>';return;}
+  if(d.need_charge){
+    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
+    document.getElementById('aresult').innerHTML='<div class="ncard"><div class="nmean">'+d.teaser+'</div><div class="pk">'+pk+'</div></div>';return;}
+  renderAnalyze(d.result,d.balance,{name,hanja,date,time,gender});refreshBal();
+  document.getElementById('aresult').scrollIntoView({behavior:'smooth'});
+}
+function renderAnalyze(r,balance,q){
+  const eum=r.발음오행,sj=r.사주;
+  const badge={'좋음':'#2fbf71','무난':'#5b8def','아쉬움':'#e0a020','부딪힘':'#e0489b'}[eum.등급]||'#888';
+  let flow=eum.흐름.map(f=>f.a+' <b style="color:'+badge+'">'+f.rel+'</b> '+f.b).join(' , ');
+  let h='<div class="ncard"><div class="nname" style="font-size:18px">🔎 '+r.이름+' 감정</div>'
+    +'<div class="nmean" style="margin-top:6px">발음오행 흐름: '+eum.배열.join(' → ')+' <span style="color:'+badge+';font-weight:900">('+eum.등급+')</span><br><span style="font-size:11.5px;color:#8a7ba5">'+flow+'</span></div>'
+    +'<div class="nmean">사주 궁합: 부족한 <b>'+(sj.부족오행.join('/')||'없음')+'</b> 기운 · 이름이 채운 것: <b>'+(sj.이름이채운오행.join('/')||'없음')+'</b> <span style="color:'+({'좋음':'#2fbf71','아쉬움':'#e0489b'}[sj.궁합]||'#888')+';font-weight:900">('+sj.궁합+')</span></div>';
+  if(r.수리&&r.수리.사격){const KR={원격:'초년',형격:'청년',이격:'장년',정격:'말년'};let sg='';
+    for(const k of['원격','형격','이격','정격']){const x=r.수리.사격[k];sg+='<div class="sg"><b>'+KR[k]+'운</b><span>'+x.수+'수 <span class="ok">'+x.등급+'</span></span></div>';}
+    h+='<div class="sgrid" style="margin-top:8px">'+sg+'</div>';}
+  else if(r.수리&&r.수리.미지원){h+='<div class="nmean" style="color:#b090b0">※ 이름 한자 중 DB에 없는 글자가 있어 획수(사격)는 생략했어</div>';}
+  h+='</div>';
+  if(r.장점.length)h+='<div class="ncard" style="background:#eefaf1"><div class="nname" style="font-size:14px;color:#2fbf71">👍 좋은 점</div><div class="nmean" style="color:#3a6b4e">'+r.장점.map(x=>'· '+x).join('<br>')+'</div></div>';
+  if(r.단점.length)h+='<div class="ncard" style="background:#fdf0f6"><div class="nname" style="font-size:14px;color:#e0489b">🤔 아쉬운 점</div><div class="nmean" style="color:#9a4a70">'+r.단점.map(x=>'· '+x).join('<br>')+'</div></div>';
+  h+='<div class="rpt" id="arpt"><span class="cur">▍</span></div><div class="tagf" id="atagf">🔎 공명이가 감정 쓰는 중…</div>';
+  document.getElementById('aresult').innerHTML=h;
+  streamAnalyze(q,balance);
+}
+async function streamAnalyze(q,balance){
+  const rpt=document.getElementById('arpt'),tagf=document.getElementById('atagf');let txt='';
+  try{
+    const resp=await fetch('/api/analyze_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});
+    const reader=resp.body.getReader(),dec=new TextDecoder();
+    while(true){const {done,value}=await reader.read();if(done)break;txt+=dec.decode(value,{stream:true});
+      rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';}
+    rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  }catch(e){rpt.innerHTML=txt+'<br>(전송이 끊겼어)';}
+  tagf.textContent='🔎 성명 감정 · 남은 부채 '+balance+'개';
+}
 function addFu(who,text,char){const log=document.getElementById('fulog');if(!log)return null;
   const b=document.createElement('div');b.className='fubub '+(who==='me'?'me':'ch');
   b.innerHTML=(who==='me'?'':(char?'<b>'+char+'</b><br>':''))+text;
@@ -527,6 +591,68 @@ def api_followup():
     resp = jsonify({"answer": answer, "char": char, "balance": opened["balance"]})
     if set_ck:
         resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
+
+
+@app.route("/api/analyze", methods=["POST"])
+def api_analyze():
+    """이름 분석(감정): 부채 2개(1,000원) 차감 → 성명학 진단 결과 반환."""
+    data = request.get_json(force=True)
+    fullname = (data.get("name") or "").strip()
+    hanja = (data.get("hanja") or "").strip() or None
+    try:
+        dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
+    except Exception:
+        return jsonify({"error": "생년월일/시간을 확인해줘."}), 400
+    gender = data.get("gender", "F")
+
+    from name_analysis import analyze_name
+    result = analyze_name(fullname, dt, gender, hanja=hanja)
+    if "error" in result:
+        return jsonify({"error": result["error"]}), 400
+
+    uid = current_user()
+    set_ck = None
+    if not uid:
+        uid = "guest_" + uuid.uuid4().hex[:10]
+        set_ck = uid
+    get_or_create_user(uid)
+    chk = can_open(uid, "analysis")
+    if not chk["ok"]:
+        resp = jsonify({"need_charge": True, "balance": chk["balance"], "cost": chk["cost"],
+                        "packages": BUCHAE_PACKAGES,
+                        "teaser": "이름 분석은 <em>부채 2개(1,000원)</em>! 네 이름 장단점 싹 진단해줄게"})
+        if set_ck:
+            resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+        return resp
+    opened = open_report(uid, "analysis")   # 부채 2개 차감
+    resp = jsonify({"ok": True, "result": result, "balance": opened["balance"]})
+    if set_ck:
+        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
+
+
+@app.route("/api/analyze_stream", methods=["POST"])
+def api_analyze_stream():
+    """공명이 이름 감정 해설 실시간 생성(차감 없음)."""
+    data = request.get_json(force=True)
+    fullname = (data.get("name") or "").strip()
+    hanja = (data.get("hanja") or "").strip() or None
+    try:
+        dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
+    except Exception:
+        return Response("[생년월일 오류]", mimetype="text/plain; charset=utf-8")
+    gender = data.get("gender", "F")
+    prompt, result = make_analysis_prompt(fullname, dt, gender, hanja=hanja)
+    if prompt is None:
+        return Response("[" + result.get("error", "오류") + "]", mimetype="text/plain; charset=utf-8")
+
+    def gen():
+        for piece in stream_interpretation(prompt):
+            yield piece
+    resp = Response(stream_with_context(gen()), mimetype="text/plain; charset=utf-8")
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers["Cache-Control"] = "no-cache"
     return resp
 
 
