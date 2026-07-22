@@ -21,7 +21,10 @@ def generate_interpretation(prompt):
                 max_tokens=5000,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return {"text": msg.content[0].text, "engine": "anthropic"}
+            text = "".join(getattr(b, "text", "") for b in msg.content
+                           if getattr(b, "type", "") == "text")
+            return {"text": text or "(리포트를 불러오지 못했어요. 다시 시도해 주세요.)",
+                    "engine": "anthropic"}
         except Exception as e:  # noqa
             return {"text": f"[Anthropic 호출 실패: {e}]\n\n아래는 생성된 프롬프트입니다.\n\n{prompt}",
                     "engine": "error"}

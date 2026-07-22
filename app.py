@@ -47,6 +47,7 @@ background:radial-gradient(circle at 12% 8%,#fff6a8 0,#fff6a800 30%),radial-grad
 .screen{display:none}.screen.on{display:block}
 .logo{font-family:'Black Han Sans';letter-spacing:-1px;background:linear-gradient(180deg,#ff8fd0,#8b7bff 50%,#37e0c8);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:2px var(--navy);filter:drop-shadow(2px 2px 0 var(--navy))}
 .spk{position:absolute;pointer-events:none}
+.skip{position:fixed;top:12px;right:14px;z-index:30;background:#fffdf7;border:2px solid var(--navy);border-radius:14px;padding:6px 12px;font-family:'Jua',sans-serif;font-size:12px;color:var(--navy);box-shadow:2px 2px 0 var(--yellow);cursor:pointer}
 /* 인트로 채팅 */
 .hd{position:sticky;top:0;z-index:5;padding:16px 6px 10px;text-align:center;background:linear-gradient(#c8cfffee,#c8cfff00)}
 .hd .logo{font-size:27px}
@@ -123,6 +124,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 
 <!-- 인트로 채팅 -->
 <section class="screen on" id="s-intro">
+  <button class="skip" onclick="toInput()">건너뛰기 →</button>
   <span class="spk" style="left:18px;top:120px;color:#ff2e86;font-size:18px">✦</span>
   <span class="spk" style="right:20px;top:175px;color:#2b2bff;font-size:18px">★</span>
   <div class="hd"><div class="logo">점며든다</div>
