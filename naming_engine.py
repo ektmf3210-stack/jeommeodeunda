@@ -21,6 +21,13 @@ OH_ORDER = ["목", "화", "토", "금", "수"]
 SANGSAENG = {"木": "火", "火": "土", "土": "金", "金": "水", "水": "木"}
 SANGGEUK = {"木": "土", "土": "水", "水": "火", "火": "金", "金": "木"}
 
+# 이상하게 들리는 이름(부정적 단어 등) 차단
+BAD_NAMES = {
+    "한심", "무심", "민심", "변심", "의심", "야심", "욕심", "고심", "환심",
+    "미친", "병신", "등신", "죽음", "지랄", "염병", "빙신", "치질", "설사",
+    "무능", "무식", "허무", "우울", "고통", "실망", "재수", "악마", "지옥",
+}
+
 # 순한글 이름 후보 (뜻 포함) — 발음오행은 런타임 계산
 SUNHANGEUL = [
     ("하람", "하늘이 내린 소중한 사람"), ("가온", "세상의 중심"),
@@ -187,21 +194,24 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
         seen_name.add(c["이름"])
         seen_char.add(ck)
         uniq.append(c)
-    # 상위 풀에서 랜덤 추출 + 같은 첫 글자 최대 1개(도배 방지) → 다양하게, 재구매 시 매번 다름
+    # 상위 풀에서 랜덤 추출 + 같은 첫/끝 글자 도배 방지 → 다양하게, 재구매 시 매번 다름
     top_pool = uniq[:max(top * 8, 48)]
     random.shuffle(top_pool)
-    seen_first, picked = {}, []
+    seen_first, seen_last, picked = {}, {}, []
     for c in top_pool:
-        f = c["이름"][0]
-        if seen_first.get(f, 0) >= 1:
+        if c["이름"] in BAD_NAMES:                 # 이상한 단어 이름 제외
+            continue
+        f, l = c["이름"][0], c["이름"][-1]
+        if seen_first.get(f, 0) >= 1 or seen_last.get(l, 0) >= 2:
             continue
         seen_first[f] = 1
+        seen_last[l] = seen_last.get(l, 0) + 1
         picked.append(c)
         if len(picked) >= top:
             break
     if len(picked) < top:                 # 모자라면 남은 것으로 채움
         for c in top_pool:
-            if c not in picked:
+            if c not in picked and c["이름"] not in BAD_NAMES:
                 picked.append(c)
             if len(picked) >= top:
                 break
