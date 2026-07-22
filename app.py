@@ -423,7 +423,6 @@ function renderNaming(r,balance,q){
       +'<div class="nmean">뜻: '+c.훈.join(' · ')+' · 부족한 '+(c.보완오행.join('/')||'오행')+' 보완</div>'
       +'<div class="sgrid">'+sg+'</div></div>';
   });
-  if(r.순한글후보&&r.순한글후보.length){h+='<div class="nsun">🌸 <b>순한글 이름</b><br>'+r.순한글후보.map(x=>x.이름+' <span style="color:#a99">('+x.뜻+')</span>').join(' · ')+'</div>';}
   h+='<div class="rpt" id="nrpt"><span class="cur">▍</span></div><div class="tagf" id="ntagf">🎏 공명이가 이름 풀이 쓰는 중…</div>';
   document.getElementById('nresult').innerHTML=h;
   streamNaming(r,q,balance);
