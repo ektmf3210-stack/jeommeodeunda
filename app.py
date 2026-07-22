@@ -17,11 +17,12 @@ LLM 자동 리포트(선택):
 """
 import os, base64, json as _json, uuid, urllib.request, urllib.error
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template_string, send_from_directory, redirect
+from flask import (Flask, request, jsonify, render_template_string,
+                   send_from_directory, redirect, Response, stream_with_context)
 
 from report_prompt import make_full_prompt, make_followup_prompt
 from report_generator import FIELDS
-from qimen_llm import generate_interpretation
+from qimen_llm import generate_interpretation, stream_interpretation
 from buchae_system import (get_balance, open_report, charge_buchae,
                            can_open, BUCHAE_PACKAGES, get_or_create_user)
 
@@ -118,6 +119,8 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .btn2{width:100%;padding:14px;border:3px solid var(--navy);border-radius:15px;background:var(--blue);color:#fff;font-family:'Black Han Sans';font-size:16px;box-shadow:3px 4px 0 var(--yellow);cursor:pointer}
 .rpt{padding:17px;white-space:pre-wrap;line-height:1.95;font-size:14.5px;color:#2e2148}.rpt b{color:var(--pink)}
 .tagf{padding:0 17px 15px;font-size:10.5px;color:#a99acb;font-family:'Jua'}
+.cur{display:inline-block;color:var(--pink);animation:blink 1s steps(1) infinite;font-weight:900}
+@keyframes blink{50%{opacity:0}}
 .fu{border-top:3px dashed var(--line);padding:15px 16px 18px;background:#faf7ff}
 .futitle{font-family:'Black Han Sans';font-size:14.5px;margin-bottom:10px}
 .futitle span{font-family:'Jua';font-size:11px;color:#fff;background:var(--pink);padding:2px 8px;border-radius:10px;margin-left:4px}
@@ -242,12 +245,32 @@ function render(d){
       +'<div class="blur">'+rows+'</div>'
       +'<div class="pw"><div class="plock">🔒 여기부턴 부채 까고!</div><div class="pmsg">'+d.teaser+'</div>'+cta+'</div></div>';
   }else{
-    h+='<div class="rpt">'+d.report.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'</div><div class="tagf">'+d.engine_note+' · 남은 부채 '+d.balance+'개</div>';
-    h+='<div class="fu"><div class="futitle">🪭 '+d.char+'한테 더 궁금한 거 있어? <span>부채 1개·500원</span></div>'
+    h+='<div class="rpt" id="rpt"><span class="cur">▍</span></div><div class="tagf" id="tagf">🪭 '+d.char+'가 지금 붓을 들었어… 실시간으로 써지는 중</div>';
+    h+='<div class="fu" id="fubox" style="display:none"><div class="futitle">🪭 '+d.char+'한테 더 궁금한 거 있어? <span>부채 1개·500원</span></div>'
       +'<div id="fulog"></div>'
       +'<div class="furow"><input id="fuq" placeholder="예) 올해 이직해도 될까?" onkeydown="if(event.key===\'Enter\')askFollow()"><button onclick="askFollow()">보내기</button></div></div>';
   }
   h+='</div>';R.innerHTML=h;
+  if(!locked && d.ready){streamReport(d);}
+}
+async function streamReport(d){
+  const rpt=document.getElementById('rpt');const tagf=document.getElementById('tagf');
+  const date=document.getElementById('date').value,time=document.getElementById('time').value,gender=document.getElementById('gender').value;
+  let txt='';
+  try{
+    const resp=await fetch('/api/report_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,gender,field:sel})});
+    const reader=resp.body.getReader();const dec=new TextDecoder();
+    const near=()=>window.innerHeight+window.scrollY>=document.body.scrollHeight-160;
+    while(true){const {done,value}=await reader.read();if(done)break;
+      txt+=dec.decode(value,{stream:true});
+      rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';
+      if(near())window.scrollTo(0,document.body.scrollHeight);
+    }
+    rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  }catch(e){rpt.innerHTML=txt+'<br>(전송이 끊겼어. 새로고침 없이 다시 눌러줘)';}
+  tagf.textContent=(d.engine_note||'')+' · 남은 부채 '+d.balance+'개';
+  const fb=document.getElementById('fubox');if(fb)fb.style.display='block';
+  refreshBal();
 }
 function addFu(who,text,char){const log=document.getElementById('fulog');if(!log)return null;
   const b=document.createElement('div');b.className='fubub '+(who==='me'?'me':'ch');
@@ -315,36 +338,61 @@ def api_report():
                 "saju_line": saju_line, "hook": hook, "best_month": best_month}
 
     # 로그인 없이 진행 — 쿠키 게스트 지갑 자동 (첫 리포트 무료)
+    # ★여기선 '열 수 있는지'만 확인(부채 차감/LLM 생성 안 함).
+    #   실제 차감+생성은 /api/report_stream 에서 실시간 스트리밍으로 처리.
     uid = current_user()
     set_ck = None
     if not uid:
         uid = "guest_" + uuid.uuid4().hex[:10]
         set_ck = uid
     get_or_create_user(uid)
-    opened = open_report(uid, field)
-    if not opened["ok"]:
+    chk = can_open(uid, field)
+    if not chk["ok"]:
         resp = jsonify({**base(), "locked": True, "need_charge": True,
-                        "balance": opened["balance"], "cost": opened["cost"], "packages": BUCHAE_PACKAGES,
-                        "teaser": f"부채 <em>1개 500원</em>이면<br>{facts['캐릭터']} 3천자가 딱 열려!"})
+                        "balance": chk["balance"], "cost": chk["cost"], "packages": BUCHAE_PACKAGES,
+                        "teaser": f"부채 <em>1개 500원</em>이면<br>{facts['캐릭터']} 리포트가 딱 열려!"})
         if set_ck:
             resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
         return resp
 
-    llm = generate_interpretation(prompt)
-    if llm["engine"] == "demo(no-key)":
-        report = ("🪭 (여기에 " + facts["캐릭터"] + "의 3천자 맞춤 리포트가 자동 생성됩니다)\n\n"
-                  "· LLM API 키를 설정하면 이 자리에 실제 리포트가 나와요.\n"
-                  "· 부채는 정상 차감되었습니다 (남은 부채: %d개).\n\n"
-                  "── 생성 근거 프롬프트(개발 확인용) ──\n\n" % opened["balance"] + prompt[:500] + " …")
-        note = "데모 모드 · 계산 엔진/부채 시스템 정상"
-    else:
-        report = llm["text"]
-        note = "해석엔진: " + llm["engine"] + " · 계산: 검증된 엔진"
-
-    resp = jsonify({**base(), "report": report, "engine_note": note, "locked": False,
-                    "balance": opened["balance"], "free_used": opened.get("free", False)})
+    # 열람 가능 — 프론트가 곧바로 /api/report_stream 을 열어 실시간 생성
+    resp = jsonify({**base(), "locked": False, "ready": True,
+                    "engine_note": "해석엔진: 실시간 · 계산: 검증된 엔진",
+                    "balance": chk.get("balance", get_balance(uid))})
     if set_ck:
         resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
+
+
+@app.route("/api/report_stream", methods=["POST"])
+def api_report_stream():
+    """부채 1개 차감 후, 리포트를 실시간(스트리밍)으로 흘려보낸다."""
+    data = request.get_json(force=True)
+    try:
+        dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
+    except Exception:
+        return Response("[날짜/시간 형식이 올바르지 않아요]", mimetype="text/plain; charset=utf-8")
+    gender = data.get("gender", "F")
+    field = data.get("field", "wealth")
+    if field not in FIELDS:
+        return Response("[알 수 없는 분야]", mimetype="text/plain; charset=utf-8")
+
+    prompt, facts = make_full_prompt(dt, gender, field)
+    uid = current_user()
+    if not uid:
+        uid = "guest_" + uuid.uuid4().hex[:10]
+    get_or_create_user(uid)
+    opened = open_report(uid, field)   # ★여기서 부채 차감
+    if not opened["ok"]:
+        return Response("[부채가 부족해요. 새로고침 후 충전해줘]", mimetype="text/plain; charset=utf-8")
+
+    def gen():
+        for piece in stream_interpretation(prompt):
+            yield piece
+
+    resp = Response(stream_with_context(gen()), mimetype="text/plain; charset=utf-8")
+    resp.headers["X-Accel-Buffering"] = "no"   # 프록시 버퍼링 끔(실시간 전달)
+    resp.headers["Cache-Control"] = "no-cache"
     return resp
 
 

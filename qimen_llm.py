@@ -52,3 +52,53 @@ def generate_interpretation(prompt):
                  "── 아래는 LLM에 전달될 '근거 주입 프롬프트' 원문입니다 ──\n\n" + prompt),
         "engine": "demo(no-key)",
     }
+
+
+def stream_interpretation(prompt):
+    """prompt -> 실시간 텍스트 조각(제너레이터). 글자가 써지는 대로 흘려보낸다."""
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    model = os.environ.get("QIMEN_MODEL")
+
+    if anthropic_key:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=anthropic_key)
+            with client.messages.stream(
+                model=model or "claude-sonnet-5",
+                max_tokens=16000,
+                thinking={"type": "disabled"},
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                for piece in stream.text_stream:
+                    if piece:
+                        yield piece
+            return
+        except Exception as e:  # noqa
+            yield f"\n\n[생성 중 오류: {e}]"
+            return
+
+    if openai_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=openai_key)
+            resp = client.chat.completions.create(
+                model=model or "gpt-4o",
+                max_tokens=16000,
+                stream=True,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            for chunk in resp:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield delta
+            return
+        except Exception as e:  # noqa
+            yield f"\n\n[생성 중 오류: {e}]"
+            return
+
+    # 키 없음 — 데모: 한 글자씩 흘려서 스트리밍 UX 확인 가능
+    demo = ("🪭 (데모 모드) LLM 키를 넣으면 여기에 실제 풀이가 실시간으로 써져요.\n"
+            "부채는 정상 차감됐어요. 이 문장은 스트리밍이 잘 되는지 보여주는 예시야.")
+    for ch in demo:
+        yield ch
