@@ -138,6 +138,44 @@ def make_followup_prompt(dt_birth, gender, field_key, question, target_year=None
     return build_followup(data, question), data
 
 
+def build_naming_prompt(result):
+    """작명 엔진 결과(dict) -> 공명이 후보 이름을 다정하게 풀어주는 프롬프트."""
+    s = result["성"]; sj = result["사주"]
+    lines = []
+    for i, c in enumerate(result["한자후보"], 1):
+        sg = c["사격"]
+        gyeoks = ", ".join(f"{k} {sg[k]['수']}수 {sg[k]['등급']}({sg[k]['격']})"
+                           for k in ("원격", "형격", "이격", "정격"))
+        lines.append(f"{i}. {s['한글']}{c['이름']} ({s['한자']}{c['한자']}) · "
+                     f"뜻: {c['훈'][0]}·{c['훈'][1]} · 자원오행 {'/'.join(c['자원오행'])} "
+                     f"(부족한 {'/'.join(c['보완오행']) or '오행'} 보완) · 사격: {gyeoks}")
+    hancands = "\n".join(lines)
+    sun = ", ".join(f"{x['이름']}({x['뜻']})" for x in result["순한글후보"])
+    facts = (f"[아기 사주] 일간 {sj['일간']}({sj['일간오행']}), "
+             f"오행분포 {sj['오행분포']}, 부족한 오행 {', '.join(sj['부족오행']) or '없음'}\n"
+             f"[성씨] {s['한글']}({s['한자']}, {s['획수']}획, 발음오행 {s['발음오행']})\n"
+             f"[한자 이름 후보]\n{hancands}\n[순한글 이름 후보] {sun}")
+    return (
+        "당신은 '공명'(꼬마 제갈량) 캐릭터입니다. 아래는 코드가 정통 수리성명학으로 확정한 작명 결과예요.\n"
+        "이 사실만 바탕으로, 부모에게 이름 후보를 다정하고 신뢰감 있게 풀어주세요.\n\n"
+        f"{facts}\n\n"
+        "[작성 규칙]\n"
+        "1. 먼저 아기 사주에서 어떤 오행이 부족한지, 그래서 이름으로 뭘 보완하는지 쉽게 설명(어려운 말엔 '쉽게 말하면~' 비유).\n"
+        "2. 한자 후보를 하나씩, 왜 이 아이에게 좋은지(뜻·보완오행·사격이 다 길한 점)를 따뜻하게 풀어줘. 사격이 '초년·청년·장년·말년운'이 다 좋다는 걸 부모가 안심하게.\n"
+        "3. 순한글 이름도 짧게 곁들여 추천.\n"
+        "4. 마지막에 '어떤 이름이든 부모 마음이 제일 중요하다'는 따뜻한 응원.\n"
+        "5. 엠대시(—) 쓰지 말 것. 다정한 존댓말로(부모 대상). 2,500~3,500자.\n\n"
+        "이제 공명이가 되어 작명 해설을 써주세요.")
+
+
+def make_naming_prompt(seong_kr, dt_birth, gender):
+    from naming_engine import generate_names
+    result = generate_names(seong_kr, dt_birth, gender)
+    if "error" in result:
+        return None, result
+    return build_naming_prompt(result), result
+
+
 if __name__ == "__main__":
     prompt, data = make_full_prompt(datetime(1991,3,21,19,56), "F", "wealth")
     print(prompt)

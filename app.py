@@ -20,7 +20,7 @@ from datetime import datetime
 from flask import (Flask, request, jsonify, render_template_string,
                    send_from_directory, redirect, Response, stream_with_context)
 
-from report_prompt import make_full_prompt, make_followup_prompt
+from report_prompt import make_full_prompt, make_followup_prompt, make_naming_prompt, build_naming_prompt
 from report_generator import FIELDS
 from qimen_llm import generate_interpretation, stream_interpretation
 from buchae_system import (get_balance, open_report, charge_buchae,
@@ -119,6 +119,18 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .btn2{width:100%;padding:14px;border:3px solid var(--navy);border-radius:15px;background:var(--blue);color:#fff;font-family:'Black Han Sans';font-size:16px;box-shadow:3px 4px 0 var(--yellow);cursor:pointer}
 .rpt{padding:17px;white-space:pre-wrap;line-height:1.95;font-size:14.5px;color:#2e2148}.rpt b{color:var(--pink)}
 .tagf{padding:0 17px 15px;font-size:10.5px;color:#a99acb;font-family:'Jua'}
+.namebox{margin:18px 0 6px;padding:16px;background:linear-gradient(135deg,#fff6fb,#eef3ff);border:2.5px solid var(--navy);border-radius:18px;box-shadow:4px 4px 0 var(--purple)}
+.nbtitle{font-family:'Black Han Sans';font-size:17px}
+.nbtag{font-family:'Jua';font-size:11px;color:#fff;background:var(--navy);padding:2px 8px;border-radius:10px;margin-left:4px;white-space:nowrap}
+.nbsub{font-family:'Jua';font-size:12px;color:#7a6b95;margin:6px 0 10px;line-height:1.5}
+.go2{background:var(--pink)}
+.ncard{background:#fff;border:2.5px solid var(--navy);border-radius:16px;padding:13px 14px;margin:10px 0;box-shadow:3px 3px 0 var(--blue)}
+.nname{font-family:'Black Han Sans';font-size:20px}.nname .hj{color:var(--pink);font-size:16px;margin-left:6px}
+.nmean{font-family:'Jua';font-size:12.5px;color:#6a5b85;margin:3px 0 8px}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.sg{font-family:'Jua';font-size:11.5px;padding:5px 8px;border-radius:9px;background:#f3eefc;display:flex;justify-content:space-between}
+.sg b{color:var(--navy)}.sg .ok{color:#e0489b;font-weight:900}
+.nsun{font-family:'Jua';font-size:13px;background:#fff;border:2px dashed var(--pink);border-radius:14px;padding:11px 13px;margin:10px 0;line-height:1.7}
 .cur{display:inline-block;color:var(--pink);animation:blink 1s steps(1) infinite;font-weight:900}
 @keyframes blink{50%{opacity:0}}
 .fu{border-top:3px dashed var(--line);padding:15px 16px 18px;background:#faf7ff}
@@ -164,6 +176,19 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
   <div class="spin" id="spin">🪭 공명이가 부채를 펼치는 중…</div>
   <div id="result"></div>
+  <div class="namebox">
+    <div class="nbtitle">🎏 아이 이름 짓기 <span class="nbtag">정통 수리성명학 · 부채 5개</span></div>
+    <div class="nbsub">아기 사주로 부족한 기운을 찾아, 사격(초년·청년·장년·말년운)이 다 좋은 이름만 골라줘</div>
+    <label>아기 성 (한글 한 글자)</label>
+    <input type="text" id="nseong" maxlength="1" placeholder="예) 김">
+    <label>아기 태어난 날 (양력) · 시간 모르면 비워둬도 돼</label>
+    <div class="rowf"><div><input type="date" id="ndate"></div><div><input type="time" id="ntime"></div></div>
+    <label>성별</label>
+    <select id="ngender"><option value="M">남아</option><option value="F">여아</option></select>
+    <button class="go go2" onclick="runNaming()">🎏 이름 지어줘</button>
+  </div>
+  <div class="spin" id="nspin">🎏 공명이가 획수를 세는 중…</div>
+  <div id="nresult"></div>
   <p class="foot">전통 술수 기반 참고·오락용 · 계산은 검증된 엔진, 해석은 AI<br>중요한 결정은 본인 판단으로!</p>
 </section>
 
@@ -271,6 +296,49 @@ async function streamReport(d){
   tagf.textContent=(d.engine_note||'')+' · 남은 부채 '+d.balance+'개';
   const fb=document.getElementById('fubox');if(fb)fb.style.display='block';
   refreshBal();
+}
+async function runNaming(){
+  const seong=document.getElementById('nseong').value.trim();
+  const date=document.getElementById('ndate').value,time=document.getElementById('ntime').value||'12:00';
+  const gender=document.getElementById('ngender').value;
+  if(!seong){alert('아기 성을 한 글자 넣어줘 (예: 김)');return;}
+  if(!date){alert('아기 태어난 날을 넣어줘~');return;}
+  document.getElementById('nspin').style.display='block';document.getElementById('nresult').innerHTML='';
+  let d;
+  try{d=await(await fetch('/api/naming',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({seong,date,time,gender})})).json();}
+  catch(e){document.getElementById('nspin').style.display='none';document.getElementById('nresult').innerHTML='<div class="ncard">오류가 났어. 다시 해줄래?</div>';return;}
+  document.getElementById('nspin').style.display='none';
+  if(d.error){document.getElementById('nresult').innerHTML='<div class="ncard">'+d.error+'</div>';return;}
+  if(d.need_charge){
+    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div></div>';}
+    document.getElementById('nresult').innerHTML='<div class="ncard"><div class="nmean">'+d.teaser+'</div><div class="pk">'+pk+'</div></div>';return;}
+  renderNaming(d.result,d.balance,{seong,date,time,gender});refreshBal();
+  document.getElementById('nresult').scrollIntoView({behavior:'smooth'});
+}
+function renderNaming(r,balance,q){
+  const G=['원격','형격','이격','정격'],KR={원격:'초년',형격:'청년',이격:'장년',정격:'말년'};
+  let h='<div class="ncard" style="background:#eef3ff"><div class="nmean">🎏 아기 사주(일간 <b>'+r.사주.일간+'</b>)에 <b>'+(r.사주.부족오행.join(', ')||'큰 부족 없')+'</b> 기운이 부족해서, 그걸 채우는 이름으로 골랐어</div></div>';
+  r.한자후보.forEach(c=>{
+    let sg='';G.forEach(k=>{const x=c.사격[k];sg+='<div class="sg"><b>'+KR[k]+'운</b><span>'+x.수+'수 <span class="ok">'+x.등급+'</span></span></div>';});
+    h+='<div class="ncard"><div class="nname">'+r.성.한글+c.이름+'<span class="hj">'+r.성.한자+c.한자+'</span></div>'
+      +'<div class="nmean">뜻: '+c.훈.join(' · ')+' · 부족한 '+(c.보완오행.join('/')||'오행')+' 보완</div>'
+      +'<div class="sgrid">'+sg+'</div></div>';
+  });
+  if(r.순한글후보&&r.순한글후보.length){h+='<div class="nsun">🌸 <b>순한글 이름</b><br>'+r.순한글후보.map(x=>x.이름+' <span style="color:#a99">('+x.뜻+')</span>').join(' · ')+'</div>';}
+  h+='<div class="rpt" id="nrpt"><span class="cur">▍</span></div><div class="tagf" id="ntagf">🎏 공명이가 이름 풀이 쓰는 중…</div>';
+  document.getElementById('nresult').innerHTML=h;
+  streamNaming(q,balance);
+}
+async function streamNaming(q,balance){
+  const rpt=document.getElementById('nrpt'),tagf=document.getElementById('ntagf');let txt='';
+  try{
+    const resp=await fetch('/api/naming_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});
+    const reader=resp.body.getReader(),dec=new TextDecoder();
+    while(true){const {done,value}=await reader.read();if(done)break;txt+=dec.decode(value,{stream:true});
+      rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';}
+    rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  }catch(e){rpt.innerHTML=txt+'<br>(풀이 전송이 끊겼어)';}
+  tagf.textContent='🎏 정통 수리성명학 · 남은 부채 '+balance+'개';
 }
 function addFu(who,text,char){const log=document.getElementById('fulog');if(!log)return null;
   const b=document.createElement('div');b.className='fubub '+(who==='me'?'me':'ch');
@@ -438,6 +506,69 @@ def api_followup():
     resp = jsonify({"answer": answer, "char": char, "balance": opened["balance"]})
     if set_ck:
         resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
+
+
+@app.route("/api/naming", methods=["POST"])
+def api_naming():
+    """작명: 부채 5개(2,500원) 차감 → 정통 수리성명학 이름 후보 반환."""
+    data = request.get_json(force=True)
+    seong = (data.get("seong") or "").strip()
+    try:
+        dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
+    except Exception:
+        return jsonify({"error": "아기 생년월일/시간을 확인해줘."}), 400
+    gender = data.get("gender", "M")
+
+    from naming_engine import generate_names
+    # 성씨/입력 검증 먼저 (부채 차감 전에)
+    result = generate_names(seong, dt, gender)
+    if "error" in result:
+        return jsonify({"error": result["error"]}), 400
+    if not result["한자후보"]:
+        return jsonify({"error": "조건에 맞는 이름을 못 찾았어. 시간을 넣거나 다른 성씨로 해줄래?"}), 400
+
+    uid = current_user()
+    set_ck = None
+    if not uid:
+        uid = "guest_" + uuid.uuid4().hex[:10]
+        set_ck = uid
+    get_or_create_user(uid)
+    chk = can_open(uid, "naming")
+    if not chk["ok"]:
+        resp = jsonify({"need_charge": True, "balance": chk["balance"], "cost": chk["cost"],
+                        "packages": BUCHAE_PACKAGES,
+                        "teaser": "작명은 <em>부채 5개(2,500원)</em>! 사주 맞춘 이름 후보가 좍 나와"})
+        if set_ck:
+            resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+        return resp
+    opened = open_report(uid, "naming")   # 부채 5개 차감
+    resp = jsonify({"ok": True, "result": result, "balance": opened["balance"]})
+    if set_ck:
+        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
+
+
+@app.route("/api/naming_stream", methods=["POST"])
+def api_naming_stream():
+    """공명이 작명 해설 실시간 생성(차감 없음, 후보는 이미 /api/naming에서 결제)."""
+    data = request.get_json(force=True)
+    seong = (data.get("seong") or "").strip()
+    try:
+        dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
+    except Exception:
+        return Response("[생년월일 오류]", mimetype="text/plain; charset=utf-8")
+    gender = data.get("gender", "M")
+    prompt, result = make_naming_prompt(seong, dt, gender)
+    if prompt is None:
+        return Response("[" + result.get("error", "오류") + "]", mimetype="text/plain; charset=utf-8")
+
+    def gen():
+        for piece in stream_interpretation(prompt):
+            yield piece
+    resp = Response(stream_with_context(gen()), mimetype="text/plain; charset=utf-8")
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers["Cache-Control"] = "no-cache"
     return resp
 
 
