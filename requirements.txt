@@ -1,0 +1,5 @@
+flask>=3.0
+lunar-python>=1.4.4
+gunicorn>=21.0
+anthropic>=0.40
+# openai>=1.50   # OpenAI 쓸 경우 주석 해제

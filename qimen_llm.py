@@ -1,0 +1,50 @@
+# -*- coding: utf-8 -*-
+"""
+LLM 호출 훅.
+- 환경변수 ANTHROPIC_API_KEY 또는 OPENAI_API_KEY 가 있으면 실제 해석 생성.
+- 둘 다 없으면 prompt만 그대로 반환(오프라인/키 없이도 앱이 동작하도록).
+"""
+import os
+
+
+def generate_interpretation(prompt):
+    """prompt(str) -> {'text': 해석텍스트, 'engine': 사용모델/모드}."""
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+
+    if anthropic_key:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=anthropic_key)
+            msg = client.messages.create(
+                model=os.environ.get("QIMEN_MODEL", "claude-sonnet-5"),
+                max_tokens=1200,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return {"text": msg.content[0].text, "engine": "anthropic"}
+        except Exception as e:  # noqa
+            return {"text": f"[Anthropic 호출 실패: {e}]\n\n아래는 생성된 프롬프트입니다.\n\n{prompt}",
+                    "engine": "error"}
+
+    if openai_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=openai_key)
+            resp = client.chat.completions.create(
+                model=os.environ.get("QIMEN_MODEL", "gpt-4o"),
+                max_tokens=1200,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return {"text": resp.choices[0].message.content, "engine": "openai"}
+        except Exception as e:  # noqa
+            return {"text": f"[OpenAI 호출 실패: {e}]\n\n아래는 생성된 프롬프트입니다.\n\n{prompt}",
+                    "engine": "error"}
+
+    # 키 없음 — 프롬프트만 반환(데모 모드)
+    return {
+        "text": ("⚠️ LLM API 키가 설정되지 않아 자동 해석을 생성하지 못했습니다.\n"
+                 "환경변수 ANTHROPIC_API_KEY 또는 OPENAI_API_KEY를 설정하면 이 자리에 "
+                 "근거 기반 해석이 자동 생성됩니다.\n\n"
+                 "── 아래는 LLM에 전달될 '근거 주입 프롬프트' 원문입니다 ──\n\n" + prompt),
+        "engine": "demo(no-key)",
+    }
