@@ -425,12 +425,12 @@ function renderNaming(r,balance,q){
   if(r.순한글후보&&r.순한글후보.length){h+='<div class="nsun">🌸 <b>순한글 이름</b><br>'+r.순한글후보.map(x=>x.이름+' <span style="color:#a99">('+x.뜻+')</span>').join(' · ')+'</div>';}
   h+='<div class="rpt" id="nrpt"><span class="cur">▍</span></div><div class="tagf" id="ntagf">🎏 공명이가 이름 풀이 쓰는 중…</div>';
   document.getElementById('nresult').innerHTML=h;
-  streamNaming(q,balance);
+  streamNaming(r,q,balance);
 }
-async function streamNaming(q,balance){
+async function streamNaming(r,q,balance){
   const rpt=document.getElementById('nrpt'),tagf=document.getElementById('ntagf');let txt='';
   try{
-    const resp=await fetch('/api/naming_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});
+    const resp=await fetch('/api/naming_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...q,result:r})});
     const reader=resp.body.getReader(),dec=new TextDecoder();
     while(true){const {done,value}=await reader.read();if(done)break;txt+=dec.decode(value,{stream:true});
       rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';}
@@ -850,10 +850,15 @@ def api_naming_stream():
     fixed = (data.get("fixed") or "").strip() or None
     fixed_pos = data.get("fixed_pos")
     single = bool(data.get("single"))
-    prompt, result = make_naming_prompt(seong, dt, gender, seong_hanja=seong_hanja,
-                                        fixed=fixed, fixed_pos=fixed_pos, single=single)
-    if prompt is None:
-        return Response("[" + result.get("error", "오류") + "]", mimetype="text/plain; charset=utf-8")
+    # ★이미 /api/naming 에서 뽑아 보여준 후보(result)를 그대로 해설 (랜덤 재생성 방지)
+    passed = data.get("result")
+    if passed and passed.get("한자후보"):
+        prompt = build_naming_prompt(passed)
+    else:
+        prompt, result = make_naming_prompt(seong, dt, gender, seong_hanja=seong_hanja,
+                                            fixed=fixed, fixed_pos=fixed_pos, single=single)
+        if prompt is None:
+            return Response("[" + result.get("error", "오류") + "]", mimetype="text/plain; charset=utf-8")
 
     def gen():
         for piece in stream_interpretation(prompt):
