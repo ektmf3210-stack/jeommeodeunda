@@ -19,6 +19,7 @@ def generate_interpretation(prompt):
             msg = client.messages.create(
                 model=os.environ.get("QIMEN_MODEL", "claude-sonnet-5"),
                 max_tokens=5000,
+                thinking={"type": "disabled"},
                 messages=[{"role": "user", "content": prompt}],
             )
             text = "".join(getattr(b, "text", "") for b in msg.content
