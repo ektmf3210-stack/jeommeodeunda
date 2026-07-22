@@ -13,7 +13,7 @@ from datetime import datetime
 
 
 STYLE_RULES = """[작성 규칙 · 반드시 지킬 것]
-1. 분량: 5,000자 내외로 충분히 길고 풍성하게. 짧으면 안 됨(돈 낸 사람이 "이게 다야?" 하면 실패).
+1. ★분량: 반드시 5,000자 이상 (공백 포함, 한글 기준). 이보다 짧으면 실패로 본다. 구조의 각 단계를 최소 5~7문장 이상 아주 충실하게 풀어써서 분량을 채워라. 절대 요약하듯 짧게 끝내지 말 것. 돈 낸 사람이 "이게 다야?" 하면 망한다.
 2. 언어: 옛 용어(관성·재성·생문 등)를 그대로 쓰지 말고 100% 현대 생활어로 번역.
    - 대운 → "인생의 시즌/계절", 겁재 → "승부욕·갓생 기질" 처럼.
    - 필요하면 요즘 개념(MBTI·FOMO·N잡 등)에 빗대도 좋음.
@@ -93,8 +93,8 @@ def build_prompt(data):
 
     is_overall = data["분야"].startswith("종합")
     struct = STRUCTURE_OVERALL if is_overall else STRUCTURE
-    length = ("가장 길고 알차게(개별 분야 리포트보다 훨씬 풍성하게). 아래 모든 단계를 하나도 빠짐없이 채운다."
-              if is_overall else "5천자 내외로, 같은 얘기 반복 없이 다채롭게")
+    length = ("반드시 6,000자 이상. 아래 9단계를 하나도 빠짐없이, 각 단계를 6문장 이상 아주 충실히 채워라. 짧으면 실패."
+              if is_overall else "반드시 5,000자 이상. 각 단계를 5문장 이상 충실히, 같은 얘기 반복 없이 다채롭게. 짧으면 실패")
 
     return f"""당신은 '{data['캐릭터']}' 캐릭터로 빙의해 사주+기문 운세 리포트를 쓰는 작가입니다.
 아래 근거로, 규칙과 구조에 맞춰 {data['분야']} 리포트를 작성하세요.
@@ -109,6 +109,33 @@ def build_prompt(data):
 def make_full_prompt(dt_birth, gender, field_key, target_year=None):
     data = generate_report_data(dt_birth, gender, field_key, target_year)
     return build_prompt(data), data
+
+
+def build_followup(data, question):
+    """리포트 뒤 '추가 질문'에 캐릭터가 답하는 프롬프트."""
+    s = data["사주"]; qm = data["기문"]
+    sinsal = ", ".join(x["이름"] for x in s.get("신살", [])) or "특이 신살 없음"
+    ss = s.get("십성", {})
+    facts = (f"· 분야: {data['분야']} / 담당 캐릭터: {data['캐릭터']} ({data['캐릭터소개']})\n"
+             f"· 일간 {s['일간']}({s['일간오행']} 기운), 강한 오행 {s.get('강한오행','')}, 없는 오행 {', '.join(s['없는오행']) or '없음'}\n"
+             f"· 십성: 년간 {ss.get('년간','')}, 월간 {ss.get('월간','')}, 시간 {ss.get('시간','')}\n"
+             f"· 대운 {s['대운']} / 올해 세운 {s.get('세운','')}\n"
+             f"· 신살: {sinsal}\n"
+             f"· 기문 최적 시기 {qm['최적월'][0]}월, 방위/성격 등 요소: "
+             + "; ".join(f"{k} {v}" for k, v in list(qm['요소'].items())[:6]))
+    return (f"당신은 '{data['캐릭터']}' 캐릭터입니다. 아래 '이 사람의 사주·기문 근거'만 바탕으로, "
+            f"유저의 추가 질문에 캐릭터 말투로 답하세요.\n\n[근거]\n{facts}\n\n"
+            "[규칙]\n"
+            "1. 근거 안에서만 답하고, 없는 사실은 지어내지 말 것.\n"
+            "2. 어려운 명리·기문 용어엔 '쉽게 말하면 ~야' 비유를 꼭 붙일 것.\n"
+            "3. 엠대시(—) 쓰지 말 것. 캐릭터 말투로 반말 다정하게, 유저를 '너'로.\n"
+            "4. 800~1500자로, 질문에 딱 맞게 구체적으로. 마지막에 짧은 응원 한마디.\n\n"
+            f"[유저의 추가 질문]\n{question}\n\n이제 {data['캐릭터']}로서 답하세요.")
+
+
+def make_followup_prompt(dt_birth, gender, field_key, question, target_year=None):
+    data = generate_report_data(dt_birth, gender, field_key, target_year)
+    return build_followup(data, question), data
 
 
 if __name__ == "__main__":

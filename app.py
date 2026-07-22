@@ -19,7 +19,7 @@ import os, base64, json as _json, uuid, urllib.request, urllib.error
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template_string, send_from_directory, redirect
 
-from report_prompt import make_full_prompt
+from report_prompt import make_full_prompt, make_followup_prompt
 from report_generator import FIELDS
 from qimen_llm import generate_interpretation
 from buchae_system import (get_balance, open_report, charge_buchae,
@@ -118,6 +118,17 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .btn2{width:100%;padding:14px;border:3px solid var(--navy);border-radius:15px;background:var(--blue);color:#fff;font-family:'Black Han Sans';font-size:16px;box-shadow:3px 4px 0 var(--yellow);cursor:pointer}
 .rpt{padding:17px;white-space:pre-wrap;line-height:1.95;font-size:14.5px;color:#2e2148}.rpt b{color:var(--pink)}
 .tagf{padding:0 17px 15px;font-size:10.5px;color:#a99acb;font-family:'Jua'}
+.fu{border-top:3px dashed var(--line);padding:15px 16px 18px;background:#faf7ff}
+.futitle{font-family:'Black Han Sans';font-size:14.5px;margin-bottom:10px}
+.futitle span{font-family:'Jua';font-size:11px;color:#fff;background:var(--pink);padding:2px 8px;border-radius:10px;margin-left:4px}
+#fulog{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.fubub{padding:9px 12px;border-radius:14px;font-size:13px;line-height:1.6;max-width:88%;border:2px solid var(--navy)}
+.fubub.me{align-self:flex-end;background:var(--blue);color:#fff;border-radius:14px 14px 4px 14px}
+.fubub.ch{align-self:flex-start;background:#fff;border-radius:14px 14px 14px 4px;box-shadow:2px 2px 0 var(--purple)}
+.fubub.ch b{color:var(--pink)}
+.furow{display:flex;gap:7px}
+.furow input{flex:1;padding:11px;border:2.5px solid var(--navy);border-radius:12px;font-size:13px;font-family:inherit}
+.furow button{border:2.5px solid var(--navy);border-radius:12px;background:var(--blue);color:#fff;font-family:'Jua';font-size:13px;padding:0 15px;cursor:pointer}
 .foot{font-size:10px;color:#7a6a9a;text-align:center;padding:6px 18px 30px;line-height:1.7}
 </style></head><body>
 <div class="ph">
@@ -232,8 +243,27 @@ function render(d){
       +'<div class="pw"><div class="plock">🔒 여기부턴 부채 까고!</div><div class="pmsg">'+d.teaser+'</div>'+cta+'</div></div>';
   }else{
     h+='<div class="rpt">'+d.report.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'</div><div class="tagf">'+d.engine_note+' · 남은 부채 '+d.balance+'개</div>';
+    h+='<div class="fu"><div class="futitle">🪭 '+d.char+'한테 더 궁금한 거 있어? <span>부채 1개·500원</span></div>'
+      +'<div id="fulog"></div>'
+      +'<div class="furow"><input id="fuq" placeholder="예) 올해 이직해도 될까?" onkeydown="if(event.key===\'Enter\')askFollow()"><button onclick="askFollow()">보내기</button></div></div>';
   }
   h+='</div>';R.innerHTML=h;
+}
+function addFu(who,text,char){const log=document.getElementById('fulog');if(!log)return null;
+  const b=document.createElement('div');b.className='fubub '+(who==='me'?'me':'ch');
+  b.innerHTML=(who==='me'?'':(char?'<b>'+char+'</b><br>':''))+text;
+  log.appendChild(b);b.scrollIntoView({behavior:'smooth',block:'nearest'});return b;}
+async function askFollow(){
+  const el=document.getElementById('fuq');const q=(el.value||'').trim();if(!q)return;
+  const date=document.getElementById('date').value,time=document.getElementById('time').value,gender=document.getElementById('gender').value;
+  el.value='';addFu('me',q);const wait=addFu('ch','🪭 생각 중…','');
+  let d;try{d=await(await fetch('/api/followup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,gender,field:sel,question:q})})).json();}catch(e){if(wait)wait.remove();addFu('ch','(오류가 났어. 다시 해봐)','');return;}
+  if(wait)wait.remove();
+  if(d.error){addFu('ch','('+d.error+')',d.char);return;}
+  if(d.need_charge){let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div></div>';}
+    addFu('ch',d.teaser+'<div class="pk" style="margin-top:8px">'+pk+'</div>',d.char);}
+  else{addFu('ch',d.answer.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>'),d.char);}
+  refreshBal();
 }
 </script></body></html>"""
 
@@ -313,6 +343,51 @@ def api_report():
 
     resp = jsonify({**base(), "report": report, "engine_note": note, "locked": False,
                     "balance": opened["balance"], "free_used": opened.get("free", False)})
+    if set_ck:
+        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
+
+
+@app.route("/api/followup", methods=["POST"])
+def api_followup():
+    """리포트 뒤 추가 질문 → 부채 1개(500원) 차감하고 캐릭터가 답."""
+    data = request.get_json(force=True)
+    try:
+        dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
+    except Exception:
+        return jsonify({"error": "날짜/시간 형식이 올바르지 않습니다."}), 400
+    gender = data.get("gender", "F")
+    field = data.get("field", "overall")
+    if field not in FIELDS:
+        field = "overall"
+    question = (data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "질문을 입력해줘"}), 400
+
+    prompt, facts = make_followup_prompt(dt, gender, field, question)
+    char = facts["캐릭터"]
+
+    uid = current_user()
+    set_ck = None
+    if not uid:
+        uid = "guest_" + uuid.uuid4().hex[:10]
+        set_ck = uid
+    get_or_create_user(uid)
+    opened = open_report(uid, "followup")   # 부채 1개 차감
+    if not opened["ok"]:
+        resp = jsonify({"need_charge": True, "char": char,
+                        "balance": opened["balance"], "packages": BUCHAE_PACKAGES,
+                        "teaser": f"부채 <em>1개(500원)</em>면 {char}가 답해줄게!"})
+        if set_ck:
+            resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+        return resp
+
+    llm = generate_interpretation(prompt)
+    if llm["engine"] == "demo(no-key)":
+        answer = f"🪭 (여기에 {char}의 답변이 자동 생성됩니다. LLM 키를 넣으면 진짜 답이 나와요. 부채는 정상 차감됨.)"
+    else:
+        answer = llm["text"]
+    resp = jsonify({"answer": answer, "char": char, "balance": opened["balance"]})
     if set_ck:
         resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
     return resp
