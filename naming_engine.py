@@ -10,7 +10,8 @@
 import random
 from datetime import datetime
 from suri import four_gyeok, four_gyeok_single
-from hanja_db import SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong, gender_ok, ending_ok
+from hanja_db import (SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong,
+                      gender_ok, ending_ok, ENDING_ONLY)
 from saju_engine import compute_saju
 
 KR2HANJA = {"목": "木", "화": "火", "토": "土", "금": "金", "수": "水"}
@@ -132,10 +133,11 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
     cands = []
     # 끝 글자(외자면 그 글자, 두자면 뒷글자)는 여아 어미 규칙 적용
     end_pool = [p for p in pool if ending_ok(p[0], want)]
+    first_pool = [p for p in pool if p[0] not in ENDING_ONLY]   # 첫 글자엔 '끝전용' 제외
 
     if single:
-        # ── 외자(홑이름): 이름 한 글자 (끝 글자 규칙 적용) ──
-        src = fixed_entries if fixed_entries else end_pool
+        # ── 외자(홑이름): 이름 한 글자 (끝전용 음절 제외) ──
+        src = fixed_entries if fixed_entries else [p for p in end_pool if p[0] not in ENDING_ONLY]
         for (e1, h1, hun1, hk1, oh1) in src:
             fg = four_gyeok_single(s_hoek, hk1)
             if not fg["_모두길"]:
@@ -153,7 +155,7 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
             })
     else:
         # ── 두 글자: fixed_pos(1/2)에 고정, 나머지 자유 ──
-        pos1 = fixed_entries if (fixed and fixed_pos == 1) else pool
+        pos1 = fixed_entries if (fixed and fixed_pos == 1) else first_pool
         pos2 = fixed_entries if (fixed and fixed_pos == 2) else end_pool
         for (e1, h1, hun1, hk1, oh1) in pos1:
             eo1 = eum_ohaeng(e1)
@@ -185,10 +187,24 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
         seen_name.add(c["이름"])
         seen_char.add(ck)
         uniq.append(c)
-    # 상위 풀에서 랜덤 추출 → 재구매 시 매번 다른 이름 (사격은 모두 길이라 품질 동일)
-    top_pool = uniq[:max(top * 4, 24)]
+    # 상위 풀에서 랜덤 추출 + 같은 첫 글자 최대 1개(도배 방지) → 다양하게, 재구매 시 매번 다름
+    top_pool = uniq[:max(top * 8, 48)]
     random.shuffle(top_pool)
-    picked = top_pool[:top]
+    seen_first, picked = {}, []
+    for c in top_pool:
+        f = c["이름"][0]
+        if seen_first.get(f, 0) >= 1:
+            continue
+        seen_first[f] = 1
+        picked.append(c)
+        if len(picked) >= top:
+            break
+    if len(picked) < top:                 # 모자라면 남은 것으로 채움
+        for c in top_pool:
+            if c not in picked:
+                picked.append(c)
+            if len(picked) >= top:
+                break
     picked.sort(key=lambda c: c["_score"], reverse=True)
 
     # 순한글 후보 (발음 상극 없는 것), 매번 섞어서 다양하게
