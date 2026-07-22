@@ -176,14 +176,15 @@ const MSG=[
 ];
 const chat=document.getElementById('chat');
 let mi=0, introLeft=false;
+function smartScroll(){if(introLeft)return;if(window.innerHeight+window.scrollY>=document.body.scrollHeight-150)scrollTo(0,document.body.scrollHeight);}
 function typing(){if(introLeft)return;const t=document.createElement('div');t.className='row';t.id='typing';
   t.innerHTML='<img class="av" src="/char/gongmyeong.png"><div class="tb"><span></span><span></span><span></span></div>';
-  chat.appendChild(t);t.classList.add('show');scrollTo(0,document.body.scrollHeight);}
+  chat.appendChild(t);t.classList.add('show');smartScroll();}
 function nextMsg(){if(introLeft)return;const t=document.getElementById('typing');if(t)t.remove();
   if(mi>=MSG.length){document.getElementById('ctaw').classList.add('show');return;}
   const r=document.createElement('div');r.className='row';
   r.innerHTML='<img class="av" src="/char/gongmyeong.png"><div class="bub">'+MSG[mi]+'</div>';
-  chat.appendChild(r);requestAnimationFrame(()=>r.classList.add('show'));scrollTo(0,document.body.scrollHeight);mi++;
+  chat.appendChild(r);requestAnimationFrame(()=>r.classList.add('show'));smartScroll();mi++;
   setTimeout(()=>{if(introLeft)return;typing();setTimeout(nextMsg,1100);},Math.min(1500,700+MSG[mi-1].replace(/<[^>]+>/g,'').length*22));}
 setTimeout(()=>{if(introLeft)return;typing();setTimeout(nextMsg,900);},500);
 
