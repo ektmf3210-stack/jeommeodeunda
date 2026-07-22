@@ -483,7 +483,9 @@ async function runAnalyze(){
   renderAnalyze(d.result,d.balance,{name,hanja,date,time,gender});refreshBal();
   document.getElementById('aresult').scrollIntoView({behavior:'smooth'});
 }
+let lastAnalysis=null;
 function renderAnalyze(r,balance,q){
+  lastAnalysis=r;
   const eum=r.발음오행,sj=r.사주;
   const badge={'좋음':'#2fbf71','무난':'#5b8def','아쉬움':'#e0a020','부딪힘':'#e0489b'}[eum.등급]||'#888';
   let flow=eum.흐름.map(f=>f.a+' <b style="color:'+badge+'">'+f.rel+'</b> '+f.b).join(' , ');
@@ -497,9 +499,52 @@ function renderAnalyze(r,balance,q){
   h+='</div>';
   if(r.장점.length)h+='<div class="ncard" style="background:#eefaf1"><div class="nname" style="font-size:14px;color:#2fbf71">👍 좋은 점</div><div class="nmean" style="color:#3a6b4e">'+r.장점.map(x=>'· '+x).join('<br>')+'</div></div>';
   if(r.단점.length)h+='<div class="ncard" style="background:#fdf0f6"><div class="nname" style="font-size:14px;color:#e0489b">🤔 아쉬운 점</div><div class="nmean" style="color:#9a4a70">'+r.단점.map(x=>'· '+x).join('<br>')+'</div></div>';
+  h+='<button class="go" style="background:linear-gradient(90deg,#ff2e86,#7b5bff);margin-top:10px" onclick="shareCard()">📸 결과 이미지로 저장 · 공유</button>';
   h+='<div class="rpt" id="arpt"><span class="cur">▍</span></div><div class="tagf" id="atagf">🔎 공명이가 감정 쓰는 중…</div>';
   document.getElementById('aresult').innerHTML=h;
   streamAnalyze(q,balance);
+}
+function _rr(x,X,Y,w,h,r){x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+w,Y,X+w,Y+h,r);x.arcTo(X+w,Y+h,X,Y+h,r);x.arcTo(X,Y+h,X,Y,r);x.arcTo(X,Y,X+w,Y,r);x.closePath();}
+async function shareCard(){
+  const r=lastAnalysis; if(!r){alert('먼저 이름 진단을 해줘');return;}
+  const OH={'木':['木','#35b36b'],'火':['火','#ff5a5a'],'土':['土','#d9a441'],'金':['金','#e0b400'],'水':['水','#4a7dff']};
+  const W=1080,H=1350,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+  let g=x.createLinearGradient(0,0,W,H);g.addColorStop(0,'#ffd9ec');g.addColorStop(.5,'#e4ecff');g.addColorStop(1,'#efe0ff');x.fillStyle=g;x.fillRect(0,0,W,H);
+  // 데코 별
+  x.font='60px sans-serif';x.globalAlpha=.5;x.fillText('✦',70,120);x.fillText('★',W-130,150);x.fillText('🪭',80,H-90);x.fillText('✧',W-140,H-70);x.globalAlpha=1;
+  // 패널
+  _rr(x,70,190,W-140,H-380,54);x.fillStyle='#fff';x.fill();x.lineWidth=9;x.strokeStyle='#1c1c3c';x.stroke();
+  x.textAlign='center';
+  x.fillStyle='#ff2e86';x.font='900 50px sans-serif';x.fillText('🔎 점며든다 이름풀이',W/2,290);
+  x.fillStyle='#1c1c3c';x.font='900 110px sans-serif';x.fillText(r.이름,W/2,430);
+  // 발음오행 원
+  const arr=r.발음오행.배열,n=arr.length,cx0=W/2-(n-1)*110/2,cy=560;
+  for(let i=0;i<n;i++){const oh=OH[arr[i]]||['?','#999'];const px=cx0+i*110;
+    x.beginPath();x.arc(px,cy,46,0,7);x.fillStyle=oh[1];x.fill();x.lineWidth=5;x.strokeStyle='#1c1c3c';x.stroke();
+    x.fillStyle='#fff';x.font='900 44px serif';x.fillText(oh[0],px,cy+16);
+    if(i<n-1){x.fillStyle='#1c1c3c';x.font='900 40px sans-serif';x.fillText('›',px+55,cy+14);}}
+  // 등급 뱃지
+  const bc={'좋음':'#2fbf71','무난':'#5b8def','아쉬움':'#e0a020','부딪힘':'#e0489b'}[r.발음오행.등급]||'#888';
+  _rr(x,W/2-150,640,300,74,37);x.fillStyle=bc;x.fill();
+  x.fillStyle='#fff';x.font='900 40px sans-serif';x.fillText('소리 기운 '+r.발음오행.등급,W/2,690);
+  // 한 줄 코멘트
+  const line=(r.장점[0]||r.단점[0]||'내 이름 속 기운').replace(/\(.*?\)/g,'');
+  x.fillStyle='#5a4b75';x.font='600 34px sans-serif';
+  const words=line.length>26?line.slice(0,26)+'…':line; x.fillText('"'+words+'"',W/2,800);
+  // 사주 궁합
+  x.fillStyle='#8a7ba5';x.font='600 30px sans-serif';
+  x.fillText('사주 궁합 · '+r.사주.궁합+'  |  부족한 기운 '+(r.사주.부족오행.join('/')||'없음'),W/2,870);
+  // 푸터
+  x.fillStyle='#1c1c3c';x.font='900 40px sans-serif';x.fillText('내 이름은 어떨까? 👀',W/2,H-250);
+  x.fillStyle='#ff2e86';x.font='800 34px sans-serif';x.fillText('점며든다에서 무료로 풀어보기',W/2,H-200);
+  x.fillStyle='#7a6b95';x.font='600 28px sans-serif';x.fillText(location.host,W/2,H-155);
+  c.toBlob(async(blob)=>{
+    const file=new File([blob],'점며든다_이름풀이.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'점며든다 이름풀이',text:r.이름+' 이름풀이 🔎'});return;}catch(e){}
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='점며든다_이름풀이.png';a.click();
+  },'image/png');
 }
 async function streamAnalyze(q,balance){
   const rpt=document.getElementById('arpt'),tagf=document.getElementById('atagf');let txt='';
@@ -519,13 +564,22 @@ function addFu(who,text,char){const log=document.getElementById('fulog');if(!log
 async function askFollow(){
   const el=document.getElementById('fuq');const q=(el.value||'').trim();if(!q)return;
   const date=document.getElementById('date').value,time=document.getElementById('time').value,gender=document.getElementById('gender').value;
-  el.value='';addFu('me',q);const wait=addFu('ch','🪭 생각 중…','');
-  let d;try{d=await(await fetch('/api/followup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,gender,field:sel,question:q})})).json();}catch(e){if(wait)wait.remove();addFu('ch','(오류가 났어. 다시 해봐)','');return;}
-  if(wait)wait.remove();
+  el.value='';addFu('me',q);
+  const body={date,time,gender,field:sel,question:q};
+  let d;try{d=await(await fetch('/api/followup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();}catch(e){addFu('ch','(오류가 났어. 다시 해봐)','');return;}
   if(d.error){addFu('ch','('+d.error+')',d.char);return;}
   if(d.need_charge){let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
-    addFu('ch',d.teaser+'<div class="pk" style="margin-top:8px">'+pk+'</div>',d.char);}
-  else{addFu('ch',d.answer.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>'),d.char);}
+    addFu('ch',d.teaser+'<div class="pk" style="margin-top:8px">'+pk+'</div>',d.char);return;}
+  // 실시간 스트리밍으로 답변
+  const bubble=addFu('ch','<span class="cur">▍</span>',d.char);let txt='';
+  try{
+    const resp=await fetch('/api/followup_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const reader=resp.body.getReader(),dec=new TextDecoder();
+    while(true){const {done,value}=await reader.read();if(done)break;txt+=dec.decode(value,{stream:true});
+      bubble.innerHTML='<b>'+d.char+'</b><br>'+txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';
+      bubble.scrollIntoView({behavior:'smooth',block:'nearest'});}
+    bubble.innerHTML='<b>'+d.char+'</b><br>'+txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  }catch(e){bubble.innerHTML+='<br>(전송이 끊겼어)';}
   refreshBal();
 }
 </script></body></html>"""
@@ -664,48 +718,72 @@ def api_report_stream():
     return resp
 
 
-@app.route("/api/followup", methods=["POST"])
-def api_followup():
-    """리포트 뒤 추가 질문 → 부채 1개(500원) 차감하고 캐릭터가 답."""
-    data = request.get_json(force=True)
-    try:
-        dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
-    except Exception:
-        return jsonify({"error": "날짜/시간 형식이 올바르지 않습니다."}), 400
+def _followup_args(data):
+    dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
     gender = data.get("gender", "F")
     field = data.get("field", "overall")
     if field not in FIELDS:
         field = "overall"
     question = (data.get("question") or "").strip()
+    return dt, gender, field, question
+
+
+@app.route("/api/followup", methods=["POST"])
+def api_followup():
+    """추가 질문: 열람 가능한지만 확인(부채 차감/생성은 stream에서). 빠른 응답."""
+    data = request.get_json(force=True)
+    try:
+        dt, gender, field, question = _followup_args(data)
+    except Exception:
+        return jsonify({"error": "날짜/시간 형식이 올바르지 않습니다."}), 400
     if not question:
         return jsonify({"error": "질문을 입력해줘"}), 400
 
-    prompt, facts = make_followup_prompt(dt, gender, field, question)
+    _p, facts = make_followup_prompt(dt, gender, field, question)
     char = facts["캐릭터"]
-
     uid = current_user()
     set_ck = None
     if not uid:
         uid = "guest_" + uuid.uuid4().hex[:10]
         set_ck = uid
     get_or_create_user(uid)
-    opened = open_report(uid, "followup")   # 부채 1개 차감
-    if not opened["ok"]:
+    chk = can_open(uid, "followup")
+    if not chk["ok"]:
         resp = jsonify({"need_charge": True, "char": char,
-                        "balance": opened["balance"], "packages": BUCHAE_PACKAGES,
+                        "balance": chk["balance"], "packages": BUCHAE_PACKAGES,
                         "teaser": f"부채 <em>1개(500원)</em>면 {char}가 답해줄게!"})
-        if set_ck:
-            resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-        return resp
-
-    llm = generate_interpretation(prompt)
-    if llm["engine"] == "demo(no-key)":
-        answer = f"🪭 (여기에 {char}의 답변이 자동 생성됩니다. LLM 키를 넣으면 진짜 답이 나와요. 부채는 정상 차감됨.)"
     else:
-        answer = llm["text"]
-    resp = jsonify({"answer": answer, "char": char, "balance": opened["balance"]})
+        resp = jsonify({"ok": True, "char": char})
     if set_ck:
         resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
+    return resp
+
+
+@app.route("/api/followup_stream", methods=["POST"])
+def api_followup_stream():
+    """부채 1개 차감 후 캐릭터 답변을 실시간 스트리밍."""
+    data = request.get_json(force=True)
+    try:
+        dt, gender, field, question = _followup_args(data)
+    except Exception:
+        return Response("[날짜 형식 오류]", mimetype="text/plain; charset=utf-8")
+    if not question:
+        return Response("[질문을 입력해줘]", mimetype="text/plain; charset=utf-8")
+    prompt, _facts = make_followup_prompt(dt, gender, field, question)
+    uid = current_user()
+    if not uid:
+        uid = "guest_" + uuid.uuid4().hex[:10]
+    get_or_create_user(uid)
+    opened = open_report(uid, "followup")   # 부채 1개 차감
+    if not opened["ok"]:
+        return Response("[부채가 부족해요. 새로고침 후 충전해줘]", mimetype="text/plain; charset=utf-8")
+
+    def gen():
+        for piece in stream_interpretation(prompt):
+            yield piece
+    resp = Response(stream_with_context(gen()), mimetype="text/plain; charset=utf-8")
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers["Cache-Control"] = "no-cache"
     return resp
 
 
