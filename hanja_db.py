@@ -196,10 +196,8 @@ ENDING_ONLY = {"림"}
 
 
 def ending_ok(eum, gender):
-    """이름의 '끝 글자'로 성별에 맞나. 여아는 '확실한 남자 어미'만 뺀다."""
-    if gender == "F":
-        return eum not in MALE_END
-    return True   # 남아는 성별필터(gender_ok)로 충분
+    """끝 글자 성별 제한 없음 (수·호 등도 여자/남자 이름 둘 다 될 수 있으니 막지 않음)."""
+    return True
 
 
 # 발음오행: 한글 초성 -> 오행 (아설순치후 오음)
