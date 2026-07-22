@@ -23,6 +23,7 @@ _LOCK = threading.Lock()
 BUCHAE_PACKAGES = {
     "fan_1": {"name": "부채 1개", "buchae": 1, "won": 500},
     "fan_3": {"name": "부채 3개", "buchae": 3, "won": 1300, "best": True},
+    "fan_5": {"name": "부채 5개", "buchae": 5, "won": 2300, "tag": "작명 딱!"},
     "fan_7": {"name": "부채 7개", "buchae": 7, "won": 2900},
 }
 # 분야별 부채 가격 (유료 리포트 열 때 차감)

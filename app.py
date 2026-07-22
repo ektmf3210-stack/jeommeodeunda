@@ -116,6 +116,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .pkg.best .n,.pkg.best .w{color:#fff}
 .pkg.best:after{content:"찐이득 ✦";position:absolute;top:-11px;left:50%;transform:translateX(-50%) rotate(-4deg);font-family:'Jua';font-size:9.5px;background:var(--yellow);color:var(--navy);padding:2px 8px;border-radius:10px;border:2px solid var(--navy);white-space:nowrap}
 .pkg .n{font-family:'Black Han Sans';font-size:15px;color:var(--blue)}.pkg .w{font-family:'Jua';font-size:12px;color:#7a6a9a;margin-top:2px}
+.pkg .ptag{font-family:'Jua';font-size:9px;color:#fff;background:var(--blue);border-radius:8px;padding:1px 5px;margin-top:3px;display:inline-block}
 .btn2{width:100%;padding:14px;border:3px solid var(--navy);border-radius:15px;background:var(--blue);color:#fff;font-family:'Black Han Sans';font-size:16px;box-shadow:3px 4px 0 var(--yellow);cursor:pointer}
 .rpt{padding:17px;white-space:pre-wrap;line-height:1.95;font-size:14.5px;color:#2e2148}.rpt b{color:var(--pink)}
 .tagf{padding:0 17px 15px;font-size:10.5px;color:#a99acb;font-family:'Jua'}
@@ -264,7 +265,7 @@ function render(d){
   const locked=d.need_charge;
   if(locked){
     let rows='';(d.hook||[]).forEach(e=>{rows+='<div class="hr"><span class="k">'+e.label+'</span><span class="v">'+e.text+'</span></div>';});
-    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div></div>';}
+    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
     let cta='<div class="pk">'+pk+'</div>';
     h+='<div class="hookwrap"><div class="htitle">그래서 <em>언제·어디·어떻게?</em> 👀</div>'
       +'<div class="blur">'+rows+'</div>'
@@ -310,7 +311,7 @@ async function runNaming(){
   document.getElementById('nspin').style.display='none';
   if(d.error){document.getElementById('nresult').innerHTML='<div class="ncard">'+d.error+'</div>';return;}
   if(d.need_charge){
-    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div></div>';}
+    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
     document.getElementById('nresult').innerHTML='<div class="ncard"><div class="nmean">'+d.teaser+'</div><div class="pk">'+pk+'</div></div>';return;}
   renderNaming(d.result,d.balance,{seong,date,time,gender});refreshBal();
   document.getElementById('nresult').scrollIntoView({behavior:'smooth'});
@@ -351,7 +352,7 @@ async function askFollow(){
   let d;try{d=await(await fetch('/api/followup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,gender,field:sel,question:q})})).json();}catch(e){if(wait)wait.remove();addFu('ch','(오류가 났어. 다시 해봐)','');return;}
   if(wait)wait.remove();
   if(d.error){addFu('ch','('+d.error+')',d.char);return;}
-  if(d.need_charge){let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div></div>';}
+  if(d.need_charge){let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
     addFu('ch',d.teaser+'<div class="pk" style="margin-top:8px">'+pk+'</div>',d.char);}
   else{addFu('ch',d.answer.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>'),d.char);}
   refreshBal();
