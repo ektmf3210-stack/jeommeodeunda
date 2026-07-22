@@ -9,7 +9,7 @@
 """
 from datetime import datetime
 from suri import four_gyeok
-from hanja_db import SEONG, GIVEN, eum_ohaeng
+from hanja_db import SEONG, GIVEN, eum_ohaeng, normalize_seong
 from saju_engine import compute_saju
 
 KR2HANJA = {"목": "木", "화": "火", "토": "土", "금": "金", "수": "水"}
@@ -76,9 +76,10 @@ def _eum_flow_score(s_oh, o1, o2):
 
 
 def generate_names(seong_kr, dt_birth, gender, top=6):
-    seong_kr = (seong_kr or "").strip()[:1]
-    if seong_kr not in SEONG:
-        return {"error": f"'{seong_kr}' 성씨는 아직 준비 중이야. 흔한 성씨로 해줄래?"}
+    raw = (seong_kr or "").strip()
+    seong_kr = normalize_seong(raw)
+    if seong_kr is None:
+        return {"error": f"'{raw[:2]}' 성씨를 아직 못 찾았어. 한글로 한 글자만 넣어줄래? (예: 김, 이, 박)"}
     s_hj, s_hoek = SEONG[seong_kr]
     s_oh = eum_ohaeng(seong_kr)                 # 성 발음오행(한자표기)
     s_oh_hj = KR2HANJA.get(HANJA2KR.get(s_oh, ""), s_oh) if s_oh in KR2HANJA.values() else s_oh

@@ -23,6 +23,9 @@ SEONG = {
     "마": ("馬", 10), "길": ("吉", 6), "위": ("魏", 18), "표": ("表", 8),
 }
 
+# 한자 성씨 -> 한글 성 (한자로 입력해도 인식되게)
+SEONG_BY_HANJA = {}   # 파일 하단에서 채움
+
 # 이름용 한자: 한글 음 -> [(한자, 뜻, 원획, 오행), ...]
 GIVEN = {
     # ----- 木 계열 많은 음 -----
@@ -153,6 +156,23 @@ def chosung(ch):
 def eum_ohaeng(ch):
     """한글 한 글자 -> 발음오행."""
     return CHO_OHAENG.get(chosung(ch), "")
+
+
+# 한자 성씨 역매핑 채우기 (金->김 등)
+SEONG_BY_HANJA = {v[0]: k for k, v in SEONG.items()}
+
+
+def normalize_seong(text):
+    """'김' 또는 '金' 입력 -> 한글 성('김'). 못 찾으면 None."""
+    t = (text or "").strip()
+    if not t:
+        return None
+    c = t[0]
+    if c in SEONG:
+        return c
+    if c in SEONG_BY_HANJA:
+        return SEONG_BY_HANJA[c]
+    return None
 
 
 if __name__ == "__main__":

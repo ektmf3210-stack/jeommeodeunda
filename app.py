@@ -179,8 +179,8 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   <div class="namebox">
     <div class="nbtitle">🎏 아이 이름 짓기 <span class="nbtag">정통 수리성명학 · 부채 5개</span></div>
     <div class="nbsub">아기 사주로 부족한 기운을 찾아, 사격(초년·청년·장년·말년운)이 다 좋은 이름만 골라줘</div>
-    <label>아기 성 (한글 한 글자)</label>
-    <input type="text" id="nseong" maxlength="1" placeholder="예) 김">
+    <label>아기 성 (한글로 한 글자, 예: 김)</label>
+    <input type="text" id="nseong" maxlength="1" placeholder="김">
     <label>아기 태어난 날 (양력) · 시간 모르면 비워둬도 돼</label>
     <div class="rowf"><div><input type="date" id="ndate"></div><div><input type="time" id="ntime"></div></div>
     <label>성별</label>
