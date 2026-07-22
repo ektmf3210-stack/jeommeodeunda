@@ -18,7 +18,7 @@ def generate_interpretation(prompt):
             client = anthropic.Anthropic(api_key=anthropic_key)
             msg = client.messages.create(
                 model=os.environ.get("QIMEN_MODEL", "claude-sonnet-5"),
-                max_tokens=5000,
+                max_tokens=8000,
                 thinking={"type": "disabled"},
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -36,7 +36,7 @@ def generate_interpretation(prompt):
             client = OpenAI(api_key=openai_key)
             resp = client.chat.completions.create(
                 model=os.environ.get("QIMEN_MODEL", "gpt-4o"),
-                max_tokens=5000,
+                max_tokens=8000,
                 messages=[{"role": "user", "content": prompt}],
             )
             return {"text": resp.choices[0].message.content, "engine": "openai"}

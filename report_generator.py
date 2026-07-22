@@ -153,9 +153,13 @@ def generate_report_data(dt_birth, gender, field_key, target_year=None):
             "일간": saju["일간"], "일간오행": ilgan_oh,
             "스타일키워드": style["키워드"], "스타일방식": style["방식"],
             "오행분포": saju["오행분포"],
+            "강한오행": max(saju["오행분포"], key=saju["오행분포"].get),
             "없는오행": [k for k, v in saju["오행분포"].items() if v == 0],
+            "십성": saju.get("십성", {}),
             "대운": f"{saju['현재대운']['간지_kr']} {saju['현재대운']['천간십성']}({THEME_KR.get(saju['현재대운']['천간십성'],'')})",
             "대운기간": f"{saju['현재대운']['시작연도']}~{saju['현재대운']['끝연도']}",
+            "세운": (lambda y: f"{y['간지_kr']} {y['천간십성']}({THEME_KR.get(y['천간십성'],'')})" if y else "")(
+                next((y for y in saju.get("세운", []) if y["연도"] == target_year), None)),
         },
         "기문": {
             "최적월": months, "대표월": top_m,
