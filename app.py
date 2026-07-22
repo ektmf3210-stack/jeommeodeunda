@@ -338,21 +338,27 @@ function dispatchUnlock(item,input,u){
   else if(item==='analysis')doAnalyze(input,u);
   else if(item==='followup')doFollowup(input,u);
 }
+window._unlocks=window._unlocks||{};
 (function(){
   const P=new URLSearchParams(location.search);const u=P.get('u'),item=P.get('item');
   if(!u||!item)return;
   let pend={};try{pend=JSON.parse(sessionStorage.getItem('pending')||'{}');}catch(e){}
   sessionStorage.removeItem('pending');
   history.replaceState({},'',location.pathname);
-  const input=(pend.item===item)?pend.input:{};
+  window._unlocks[item]=u;
   toInput();
   if(item==='naming')nameMenu('naming');
-  if(item==='analysis')nameMenu('analyze');
-  setTimeout(()=>dispatchUnlock(item,input,u),60);
+  else if(item==='analysis')nameMenu('analyze');
+  const NM={report:'사주리포트',naming:'작명',analysis:'이름분석',followup:'추가질문'};
+  if(pend.item===item){setTimeout(()=>dispatchUnlock(item,pend.input,u),60);}
+  else{setTimeout(()=>alert('🔓 테스트 잠금해제: '+(NM[item]||item)+'\n이제 그 기능을 결제 없이 눌러볼 수 있어!'),200);}
 })();
 
 function refreshBal(){const b=document.getElementById('bal');if(b)b.textContent='🔎 건당 990원';}
-function payFor(item,input){sessionStorage.setItem('pending',JSON.stringify({item:item,input:input}));location.href='/pay?item='+item;}
+function payFor(item,input){
+  if(window._unlocks&&window._unlocks[item]){dispatchUnlock(item,input,window._unlocks[item]);return;}
+  sessionStorage.setItem('pending',JSON.stringify({item:item,input:input}));location.href='/pay?item='+item;
+}
 
 async function run(){
   const inp={date:document.getElementById('date').value,time:document.getElementById('time').value,gender:document.getElementById('gender').value,field:sel};
