@@ -133,6 +133,15 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .sg{font-family:'Jua';font-size:11.5px;padding:5px 8px;border-radius:9px;background:#f3eefc;display:flex;justify-content:space-between}
 .sg b{color:var(--navy)}.sg .ok{color:#e0489b;font-weight:900}
 .nsun{font-family:'Jua';font-size:13px;background:#fff;border:2px dashed var(--pink);border-radius:14px;padding:11px 13px;margin:10px 0;line-height:1.7}
+.pkgbtns{display:flex;gap:6px;margin:8px 0}
+.tabb{flex:1;border:2.5px solid var(--navy);border-radius:12px;background:#fff;font-family:'Jua';font-size:13px;padding:7px 0;cursor:pointer}
+.tabb.on{background:var(--navy);color:#fff}
+.poprow{font-family:'Jua';font-size:11.5px;margin-bottom:8px}
+.popgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.popitem{font-family:'Jua';font-size:13px;background:#fff;border:2px solid var(--navy);border-radius:10px;padding:6px 9px;display:flex;align-items:center;gap:5px}
+.popitem .pr{font-family:'Black Han Sans';color:var(--pink);min-width:18px}
+.popitem .pp{margin-left:auto;font-size:10.5px;color:#a99}
+.poprc{font-size:9.5px;color:#b0a0c0;margin-top:8px;font-family:'Jua'}
 .cur{display:inline-block;color:var(--pink);animation:blink 1s steps(1) infinite;font-weight:900}
 @keyframes blink{50%{opacity:0}}
 .fu{border-top:3px dashed var(--line);padding:15px 16px 18px;background:#faf7ff}
@@ -187,6 +196,16 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
       <label>성씨 한자 선택 <span style="color:#e0489b">(획수가 달라 결과가 바뀌어요)</span></label>
       <select id="nseonghj"></select>
     </div>
+    <label>작명 방식</label>
+    <select id="nmode" onchange="nmodeUI()">
+      <option value="auto">사주 맞춤 (자동 추천)</option>
+      <option value="fix1">특정 글자 넣기 · 앞자리</option>
+      <option value="fix2">돌림자/특정 글자 · 뒷자리</option>
+      <option value="single">외자 (한 글자 이름)</option>
+    </select>
+    <div id="nfixbox" style="display:none">
+      <input type="text" id="nfix" maxlength="1" placeholder="넣을 글자 (예: 준 또는 俊)">
+    </div>
     <label>아기 태어난 날 (양력) · 시간 모르면 비워둬도 돼</label>
     <div class="rowf"><div><input type="date" id="ndate"></div><div><input type="time" id="ntime"></div></div>
     <label>성별</label>
@@ -210,6 +229,12 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
   <div class="spin" id="aspin">🔎 공명이가 획수를 세는 중…</div>
   <div id="aresult"></div>
+  <div class="namebox" style="background:linear-gradient(135deg,#fffdf0,#fff2f8)">
+    <div class="nbtitle">🏆 요즘 인기 이름 순위 <span class="nbtag" style="background:var(--yellow);color:var(--navy)">무료</span></div>
+    <div class="nbsub">대법원 출생신고 통계 기준 · 작명 트렌드 참고용</div>
+    <div class="pkgbtns"><button class="tabb on" id="tabB" onclick="popTab('남아')">👦 남아</button><button class="tabb" id="tabG" onclick="popTab('여아')">👧 여아</button></div>
+    <div id="poplist"><div class="nmean">불러오는 중…</div></div>
+  </div>
   <p class="foot">전통 술수 기반 참고·오락용 · 계산은 검증된 엔진, 해석은 AI<br>중요한 결정은 본인 판단으로!</p>
 </section>
 
@@ -252,7 +277,7 @@ setTimeout(()=>{if(introLeft)return;typing();setTimeout(nextMsg,900);},500);
 function toInput(){introLeft=true;
   document.getElementById('s-intro').classList.remove('on');
   const cw=document.getElementById('ctaw');cw.classList.remove('show');cw.style.display='none';
-  document.getElementById('s-input').classList.add('on');scrollTo(0,0);refreshBal();}
+  document.getElementById('s-input').classList.add('on');scrollTo(0,0);refreshBal();loadPop();}
 
 /* ── 입력 폼 ── */
 const fbox=document.getElementById('fields');
@@ -333,30 +358,48 @@ async function checkSeong(){
   },250);
 }
 function seongHanja(){const b=document.getElementById('nseonghjbox');return(b&&b.style.display!=='none')?document.getElementById('nseonghj').value:'';}
+function nmodeUI(){
+  const m=document.getElementById('nmode').value;
+  const box=document.getElementById('nfixbox'),inp=document.getElementById('nfix');
+  if(m==='auto'){box.style.display='none';}
+  else{box.style.display='block';
+    inp.placeholder=(m==='single')?'외자에 넣을 글자(선택) · 예: 수':(m==='fix2')?'돌림자/뒷글자 (예: 준 또는 俊)':'앞글자 (예: 서 또는 瑞)';}
+}
+function namingMode(){
+  const m=document.getElementById('nmode').value;
+  const fx=(document.getElementById('nfix').value||'').trim();
+  if(m==='fix1')return{fixed:fx,fixed_pos:1};
+  if(m==='fix2')return{fixed:fx,fixed_pos:2};
+  if(m==='single')return{single:true,fixed:fx};
+  return{};
+}
 async function runNaming(){
   const seong=document.getElementById('nseong').value.trim();
   const seong_hanja=seongHanja();
   const date=document.getElementById('ndate').value,time=document.getElementById('ntime').value||'12:00';
   const gender=document.getElementById('ngender').value;
+  const mode=namingMode();
   if(!seong){alert('아기 성을 한 글자 넣어줘 (예: 김)');return;}
   if(!date){alert('아기 태어난 날을 넣어줘~');return;}
+  if((mode.fixed_pos)&&!mode.fixed){alert('넣을 글자를 입력해줘 (예: 준)');return;}
   document.getElementById('nspin').style.display='block';document.getElementById('nresult').innerHTML='';
+  const body={seong,seong_hanja,date,time,gender,...mode};
   let d;
-  try{d=await(await fetch('/api/naming',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({seong,seong_hanja,date,time,gender})})).json();}
+  try{d=await(await fetch('/api/naming',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();}
   catch(e){document.getElementById('nspin').style.display='none';document.getElementById('nresult').innerHTML='<div class="ncard">오류가 났어. 다시 해줄래?</div>';return;}
   document.getElementById('nspin').style.display='none';
   if(d.error){document.getElementById('nresult').innerHTML='<div class="ncard">'+d.error+'</div>';return;}
   if(d.need_charge){
     let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
     document.getElementById('nresult').innerHTML='<div class="ncard"><div class="nmean">'+d.teaser+'</div><div class="pk">'+pk+'</div></div>';return;}
-  renderNaming(d.result,d.balance,{seong,seong_hanja,date,time,gender});refreshBal();
+  renderNaming(d.result,d.balance,{seong,seong_hanja,date,time,gender,...mode});refreshBal();
   document.getElementById('nresult').scrollIntoView({behavior:'smooth'});
 }
 function renderNaming(r,balance,q){
-  const G=['원격','형격','이격','정격'],KR={원격:'초년',형격:'청년',이격:'장년',정격:'말년'};
+  const KR={원격:'초년',형격:'청년',이격:'장년',정격:'말년'};
   let h='<div class="ncard" style="background:#eef3ff"><div class="nmean">🎏 아기 사주(일간 <b>'+r.사주.일간+'</b>)에 <b>'+(r.사주.부족오행.join(', ')||'큰 부족 없')+'</b> 기운이 부족해서, 그걸 채우는 이름으로 골랐어</div></div>';
   r.한자후보.forEach(c=>{
-    let sg='';G.forEach(k=>{const x=c.사격[k];sg+='<div class="sg"><b>'+KR[k]+'운</b><span>'+x.수+'수 <span class="ok">'+x.등급+'</span></span></div>';});
+    let sg='';Object.keys(c.사격).forEach(k=>{const x=c.사격[k];sg+='<div class="sg"><b>'+(KR[k]||k)+'운</b><span>'+x.수+'수 <span class="ok">'+x.등급+'</span></span></div>';});
     h+='<div class="ncard"><div class="nname">'+r.성.한글+c.이름+'<span class="hj">'+r.성.한자+c.한자+'</span></div>'
       +'<div class="nmean">뜻: '+c.훈.join(' · ')+' · 부족한 '+(c.보완오행.join('/')||'오행')+' 보완</div>'
       +'<div class="sgrid">'+sg+'</div></div>';
@@ -376,6 +419,21 @@ async function streamNaming(q,balance){
     rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
   }catch(e){rpt.innerHTML=txt+'<br>(풀이 전송이 끊겼어)';}
   tagf.textContent='🎏 정통 수리성명학 · 남은 부채 '+balance+'개';
+}
+let POP=null;
+async function loadPop(){
+  if(!POP){try{POP=await(await fetch('/api/popular')).json();}catch(e){return;}}
+  popTab('남아');
+}
+function popTab(g){
+  if(!POP)return;
+  document.getElementById('tabB').classList.toggle('on',g==='남아');
+  document.getElementById('tabG').classList.toggle('on',g==='여아');
+  const list=POP[g]||[];
+  let h='<div class="poprow" style="font-weight:900;color:#9a8">'+ (POP.trend?POP.trend[g]:'') +'</div><div class="popgrid">';
+  list.forEach(x=>{h+='<div class="popitem"><span class="pr">'+x.순위+'</span> <b>'+x.이름+'</b> <span class="pp">'+x.비율+'%</span></div>';});
+  h+='</div><div class="poprc">'+POP.source+'</div>';
+  document.getElementById('poplist').innerHTML=h;
 }
 async function runAnalyze(){
   const name=document.getElementById('aname').value.trim();
@@ -684,6 +742,13 @@ def api_analyze_stream():
     return resp
 
 
+@app.route("/api/popular")
+def api_popular():
+    """요즘 인기 아기 이름 순위 (무료)."""
+    from name_ranks import payload
+    return jsonify(payload())
+
+
 @app.route("/api/seong")
 def api_seong():
     """한글/한자 성 -> 한자 선택지(여러 개면 프론트에서 고르게)."""
@@ -704,6 +769,9 @@ def api_naming():
     data = request.get_json(force=True)
     seong = (data.get("seong") or "").strip()
     seong_hanja = data.get("seong_hanja") or None
+    fixed = (data.get("fixed") or "").strip() or None
+    fixed_pos = data.get("fixed_pos")
+    single = bool(data.get("single"))
     try:
         dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
     except Exception:
@@ -712,7 +780,8 @@ def api_naming():
 
     from naming_engine import generate_names
     # 성씨/입력 검증 먼저 (부채 차감 전에)
-    result = generate_names(seong, dt, gender, seong_hanja=seong_hanja)
+    result = generate_names(seong, dt, gender, seong_hanja=seong_hanja,
+                            fixed=fixed, fixed_pos=fixed_pos, single=single)
     if "error" in result:
         return jsonify({"error": result["error"]}), 400
     if not result["한자후보"]:
@@ -750,7 +819,11 @@ def api_naming_stream():
         return Response("[생년월일 오류]", mimetype="text/plain; charset=utf-8")
     gender = data.get("gender", "M")
     seong_hanja = data.get("seong_hanja") or None
-    prompt, result = make_naming_prompt(seong, dt, gender, seong_hanja=seong_hanja)
+    fixed = (data.get("fixed") or "").strip() or None
+    fixed_pos = data.get("fixed_pos")
+    single = bool(data.get("single"))
+    prompt, result = make_naming_prompt(seong, dt, gender, seong_hanja=seong_hanja,
+                                        fixed=fixed, fixed_pos=fixed_pos, single=single)
     if prompt is None:
         return Response("[" + result.get("error", "오류") + "]", mimetype="text/plain; charset=utf-8")
 

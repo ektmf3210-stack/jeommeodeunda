@@ -145,9 +145,9 @@ def build_naming_prompt(result):
     for i, c in enumerate(result["한자후보"], 1):
         sg = c["사격"]
         gyeoks = ", ".join(f"{k} {sg[k]['수']}수 {sg[k]['등급']}({sg[k]['격']})"
-                           for k in ("원격", "형격", "이격", "정격"))
+                           for k in sg)   # 외자는 원격/정격만, 두자는 4격
         lines.append(f"{i}. {s['한글']}{c['이름']} ({s['한자']}{c['한자']}) · "
-                     f"뜻: {c['훈'][0]}·{c['훈'][1]} · 자원오행 {'/'.join(c['자원오행'])} "
+                     f"뜻: {'·'.join(c['훈'])} · 자원오행 {'/'.join(c['자원오행'])} "
                      f"(부족한 {'/'.join(c['보완오행']) or '오행'} 보완) · 사격: {gyeoks}")
     hancands = "\n".join(lines)
     sun = ", ".join(f"{x['이름']}({x['뜻']})" for x in result["순한글후보"])
@@ -208,9 +208,11 @@ def make_analysis_prompt(fullname, dt_birth, gender, hanja=None):
     return build_analysis_prompt(r), r
 
 
-def make_naming_prompt(seong_kr, dt_birth, gender, seong_hanja=None):
+def make_naming_prompt(seong_kr, dt_birth, gender, seong_hanja=None,
+                       fixed=None, fixed_pos=None, single=False):
     from naming_engine import generate_names
-    result = generate_names(seong_kr, dt_birth, gender, seong_hanja=seong_hanja)
+    result = generate_names(seong_kr, dt_birth, gender, seong_hanja=seong_hanja,
+                            fixed=fixed, fixed_pos=fixed_pos, single=single)
     if "error" in result:
         return None, result
     return build_naming_prompt(result), result

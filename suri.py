@@ -83,6 +83,19 @@ def four_gyeok(seong_hoek, name_hoeks):
     return out
 
 
+def four_gyeok_single(seong_hoek, name_hoek):
+    """외자(홑이름) 사격. 원격=이름 단독, 정격=성+이름. (형/이격은 외자 특성상 생략)"""
+    won = name_hoek
+    jeong = seong_hoek + name_hoek
+    out = {}
+    for key, val, kr in [("원격", won, "초년운"), ("정격", jeong, "말년·총운")]:
+        g, gname = grade(val)
+        out[key] = {"수": val, "등급": g, "격": gname, "뜻": kr, "길": is_gil(val)}
+    out["_모두길"] = all(out[k]["길"] for k in ("원격", "정격"))
+    out["_길개수"] = sum(out[k]["길"] for k in ("원격", "정격"))
+    return out
+
+
 if __name__ == "__main__":
     # 예: 성 김(金 8획) + 이름 서(徐?)... 테스트용 임의 획수
     r = four_gyeok(8, [7, 9])

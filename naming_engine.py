@@ -9,7 +9,7 @@
 """
 import random
 from datetime import datetime
-from suri import four_gyeok
+from suri import four_gyeok, four_gyeok_single
 from hanja_db import SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong, gender_ok
 from saju_engine import compute_saju
 
@@ -85,54 +85,102 @@ def _flow(oh_list):
     return total, geuk
 
 
-def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None):
+def _find_entries(text):
+    """고정할 글자(한글 음 또는 한자) -> 매칭되는 [(음,한자,훈,획,오행), ...]"""
+    t = (text or "").strip()
+    if not t:
+        return []
+    c = t[0]
+    out = []
+    for eum, lst in GIVEN.items():
+        if len(eum) != 1:
+            continue
+        for (hj, hun, hk, oh) in lst:
+            if c == eum or c == hj:      # 한글 음이거나 한자 일치
+                out.append((eum, hj, hun, hk, oh))
+    return out
+
+
+def _grade_bonus(fg, keys):
+    s = 0
+    for k in keys:
+        gr = fg[k]["등급"]
+        s += 3 if gr == "최상" else (2 if gr == "상" else 1)
+    return s
+
+
+def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
+                   fixed=None, fixed_pos=None, single=False):
     raw = (seong_kr or "").strip()
     resolved = resolve_seong(raw, seong_hanja)
     if resolved is None:
         return {"error": f"'{raw[:2]}' 성씨를 아직 못 찾았어. 한글로 한 글자만 넣어줄래? (예: 김, 이, 박)"}
     seong_kr, s_hj, s_hoek = resolved
-    s_oh = eum_ohaeng(seong_kr)                 # 성 발음오행(한자표기)
-    s_oh_hj = KR2HANJA.get(HANJA2KR.get(s_oh, ""), s_oh) if s_oh in KR2HANJA.values() else s_oh
-    s_oh = s_oh                                  # eum_ohaeng already returns 木火土金水
+    s_oh = eum_ohaeng(seong_kr)
 
     saju = compute_saju(dt_birth, gender)
     wx = saju["오행분포"]
-    need = set(_need_ohaeng(wx))                # 부족오행(한자)
+    need = set(_need_ohaeng(wx))
 
     want = "F" if gender in ("F", "여", "여아") else "M"
-    pool = [p for p in _flatten() if gender_ok(p[0], want)]   # 성별 어울리는 음절만
+    pool = [p for p in _flatten() if gender_ok(p[0], want)]
+
+    fixed_entries = _find_entries(fixed) if fixed else []
+    if fixed and not fixed_entries:
+        return {"error": f"'{fixed}'는 아직 이름 한자 DB에 없어. 다른 글자로 해줄래?"}
+
     cands = []
-    for (e1, h1, hun1, hk1, oh1) in pool:
-        eo1 = eum_ohaeng(e1)                     # 이름1 발음오행
-        for (e2, h2, hun2, hk2, oh2) in pool:
-            if e1 == e2:                         # 같은 음 반복 제외
+    if single:
+        # ── 외자(홑이름): 이름 한 글자 ──
+        src = fixed_entries if fixed_entries else pool
+        for (e1, h1, hun1, hk1, oh1) in src:
+            fg = four_gyeok_single(s_hoek, hk1)
+            if not fg["_모두길"]:
                 continue
-            fg = four_gyeok(s_hoek, [hk1, hk2])
-            if not fg["_모두길"]:                # 사격 전부 길 필수
-                continue
-            eo2 = eum_ohaeng(e2)
-            flow, geuk = _flow([s_oh, eo1, eo2])  # 발음오행 흐름(초성 기준)
-            bo = [o for o in (oh1, oh2) if o in need]   # 자원오행 보완
-            score = flow + len(bo) * 5
-            for k in ("원격", "형격", "이격", "정격"):
-                gr = fg[k]["등급"]
-                score += 3 if gr == "최상" else (2 if gr == "상" else 1)
+            eo1 = eum_ohaeng(e1)
+            flow, geuk = _flow([s_oh, eo1])
+            bo = [o for o in (oh1,) if o in need]
+            score = flow + len(bo) * 5 + _grade_bonus(fg, ("원격", "정격"))
             cands.append({
-                "이름": e1 + e2, "한자": h1 + h2, "훈": [hun1, hun2],
-                "획수": [hk1, hk2], "자원오행": [oh1, oh2],
-                "발음오행": [s_oh, eo1, eo2], "보완오행": bo, "_geuk": geuk,
+                "이름": e1, "한자": h1, "훈": [hun1], "획수": [hk1],
+                "자원오행": [oh1], "발음오행": [s_oh, eo1], "보완오행": bo, "_geuk": geuk,
                 "사격": {k: {"수": fg[k]["수"], "등급": fg[k]["등급"], "격": fg[k]["격"]}
-                        for k in ("원격", "형격", "이격", "정격")},
+                        for k in ("원격", "정격")},
                 "_score": score,
             })
+    else:
+        # ── 두 글자: fixed_pos(1/2)에 고정, 나머지 자유 ──
+        pos1 = fixed_entries if (fixed and fixed_pos == 1) else pool
+        pos2 = fixed_entries if (fixed and fixed_pos == 2) else pool
+        for (e1, h1, hun1, hk1, oh1) in pos1:
+            eo1 = eum_ohaeng(e1)
+            for (e2, h2, hun2, hk2, oh2) in pos2:
+                if e1 == e2 and h1 == h2:
+                    continue
+                fg = four_gyeok(s_hoek, [hk1, hk2])
+                if not fg["_모두길"]:
+                    continue
+                eo2 = eum_ohaeng(e2)
+                flow, geuk = _flow([s_oh, eo1, eo2])
+                bo = [o for o in (oh1, oh2) if o in need]
+                score = flow + len(bo) * 5 + _grade_bonus(fg, ("원격", "형격", "이격", "정격"))
+                cands.append({
+                    "이름": e1 + e2, "한자": h1 + h2, "훈": [hun1, hun2],
+                    "획수": [hk1, hk2], "자원오행": [oh1, oh2],
+                    "발음오행": [s_oh, eo1, eo2], "보완오행": bo, "_geuk": geuk,
+                    "사격": {k: {"수": fg[k]["수"], "등급": fg[k]["등급"], "격": fg[k]["격"]}
+                            for k in ("원격", "형격", "이격", "정격")},
+                    "_score": score,
+                })
     # 미러 이름(영우/우영) 및 중복 제거, 점수순
     cands.sort(key=lambda c: c["_score"], reverse=True)
-    seen, uniq = set(), []
+    seen_name, seen_char, uniq = set(), set(), []
     for c in cands:
-        key = frozenset(c["한자"])
-        if key in seen:
+        ck = frozenset(c["한자"])
+        if c["이름"] in seen_name or ck in seen_char:   # 같은 한글이름/미러 제거
             continue
-        seen.add(key)
+        seen_name.add(c["이름"])
+        seen_char.add(ck)
         uniq.append(c)
     # 상위 풀에서 랜덤 추출 → 재구매 시 매번 다른 이름 (사격은 모두 길이라 품질 동일)
     top_pool = uniq[:max(top * 4, 24)]
