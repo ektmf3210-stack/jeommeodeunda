@@ -182,24 +182,13 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   <div class="top"><div class="bal" id="bal">🪭 부채 0</div>
     <div class="logo">점며든다</div>
     <div class="slo">내 인생, <em>어떻게 이겨?</em> 🪭</div></div>
-  <div class="card">
-    <label>태어난 날 (양력)</label>
-    <div class="rowf"><div><input type="date" id="date"></div><div><input type="time" id="time" value="12:00"></div></div>
-    <label>성별</label>
-    <select id="gender"><option value="F">여성</option><option value="M">남성</option></select>
-    <label>뭐가 제일 궁금해?</label>
-    <div class="fields" id="fields"></div>
-    <button class="go" onclick="run()">🪭 점 보러가기</button>
-  </div>
-  <div class="spin" id="spin">🪭 공명이가 부채를 펼치는 중…</div>
-  <div id="result"></div>
-  <div class="secdiv"><span>🎏 이름 서비스</span></div>
+  <div class="secdiv"><span>🔎 이름 · 작명</span></div>
   <div class="nmenu">
-    <button class="nmb on" id="nmbN" onclick="nameMenu('naming')">✍️ 작명</button>
-    <button class="nmb" id="nmbA" onclick="nameMenu('analyze')">🔎 이름분석</button>
+    <button class="nmb on" id="nmbA" onclick="nameMenu('analyze')">🔎 이름분석</button>
+    <button class="nmb" id="nmbN" onclick="nameMenu('naming')">✍️ 작명</button>
     <button class="nmb" id="nmbP" onclick="nameMenu('pop')">🏆 인기순위</button>
   </div>
-  <div id="panel-naming">
+  <div id="panel-naming" style="display:none">
   <div class="namebox">
     <div class="nbtitle">🎏 아이 이름 짓기 <span class="nbtag">정통 수리성명학 · 부채 5개</span></div>
     <div class="nbsub">아기 사주로 부족한 기운을 찾아, 사격(초년·청년·장년·말년운)이 다 좋은 이름만 골라줘</div>
@@ -228,7 +217,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   <div class="spin" id="nspin">🎏 공명이가 획수를 세는 중…</div>
   <div id="nresult"></div>
   </div>
-  <div id="panel-analyze" style="display:none">
+  <div id="panel-analyze">
   <div class="namebox" style="background:linear-gradient(135deg,#eef6ff,#f6f0ff)">
     <div class="nbtitle">🔎 내 이름 분석 <span class="nbtag" style="background:var(--blue)">성명 감정 · 부채 2개</span></div>
     <div class="nbsub">지금 내 이름, 잘 지어졌을까? 발음오행 흐름·사주 궁합·획수운(사격)으로 장단점 진단해줄게</div>
@@ -253,6 +242,18 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
     <div id="poplist"><div class="nmean">불러오는 중…</div></div>
   </div>
   </div>
+  <div class="secdiv"><span>🔮 사주 · 기문 운세</span></div>
+  <div class="card">
+    <label>태어난 날 (양력)</label>
+    <div class="rowf"><div><input type="date" id="date"></div><div><input type="time" id="time" value="12:00"></div></div>
+    <label>성별</label>
+    <select id="gender"><option value="F">여성</option><option value="M">남성</option></select>
+    <label>뭐가 제일 궁금해?</label>
+    <div class="fields" id="fields"></div>
+    <button class="go" onclick="run()">🪭 점 보러가기</button>
+  </div>
+  <div class="spin" id="spin">🪭 공명이가 부채를 펼치는 중…</div>
+  <div id="result"></div>
   <p class="foot">전통 술수 기반 참고·오락용 · 계산은 검증된 엔진, 해석은 AI<br>중요한 결정은 본인 판단으로!</p>
 </section>
 
