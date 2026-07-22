@@ -11,7 +11,7 @@ import random
 from datetime import datetime
 from suri import four_gyeok, four_gyeok_single
 from hanja_db import (SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong,
-                      gender_ok, ending_ok, ENDING_ONLY)
+                      gender_ok, ending_ok, ENDING_ONLY, PRETTY)
 from saju_engine import compute_saju
 
 KR2HANJA = {"목": "木", "화": "火", "토": "土", "금": "金", "수": "水"}
@@ -131,7 +131,8 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
     need = set(_need_ohaeng(wx))
 
     want = "F" if gender in ("F", "여", "여아") else "M"
-    pool = [p for p in _flatten() if gender_ok(p[0], want)]
+    # 성별 어울리고 + '예쁜 음절'인 것만 자동 생성에 사용 (벽자 걸러냄)
+    pool = [p for p in _flatten() if gender_ok(p[0], want) and p[0] in PRETTY]
 
     fixed_entries = _find_entries(fixed) if fixed else []
     if fixed and not fixed_entries:
