@@ -133,6 +133,11 @@ def generate_report_data(dt_birth, gender, field_key, target_year=None):
     months = best_month(dt_birth, field["gate"], target_year)
     top_m = months[0]
     qm = full_reading(target_year, top_m, field["gate"])
+    # 이동수(이동·변화 방위)는 사람·해 단위 지표라 분야마다 달라 보이면 안 됨 →
+    # 올해 대표 판(고정 기준) 하나에서 뽑아 모든 분야에 동일하게 적용.
+    canon = full_reading(target_year, 7, "生門")
+    if canon.get("이동수"):
+        qm["이동수"] = canon["이동수"]
 
     return {
         "분야": field["name"],
