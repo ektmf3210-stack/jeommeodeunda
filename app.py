@@ -181,7 +181,11 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
     <div class="nbtitle">🎏 아이 이름 짓기 <span class="nbtag">정통 수리성명학 · 부채 5개</span></div>
     <div class="nbsub">아기 사주로 부족한 기운을 찾아, 사격(초년·청년·장년·말년운)이 다 좋은 이름만 골라줘</div>
     <label>아기 성 (한글로 한 글자, 예: 김)</label>
-    <input type="text" id="nseong" maxlength="1" placeholder="김">
+    <input type="text" id="nseong" maxlength="1" placeholder="김" oninput="checkSeong()">
+    <div id="nseonghjbox" style="display:none">
+      <label>성씨 한자 선택 <span style="color:#e0489b">(획수가 달라 결과가 바뀌어요)</span></label>
+      <select id="nseonghj"></select>
+    </div>
     <label>아기 태어난 날 (양력) · 시간 모르면 비워둬도 돼</label>
     <div class="rowf"><div><input type="date" id="ndate"></div><div><input type="time" id="ntime"></div></div>
     <label>성별</label>
@@ -298,22 +302,38 @@ async function streamReport(d){
   const fb=document.getElementById('fubox');if(fb)fb.style.display='block';
   refreshBal();
 }
+let seongTimer=null;
+async function checkSeong(){
+  clearTimeout(seongTimer);
+  seongTimer=setTimeout(async()=>{
+    const v=document.getElementById('nseong').value.trim();
+    const box=document.getElementById('nseonghjbox'),sel=document.getElementById('nseonghj');
+    if(!v){box.style.display='none';return;}
+    let d;try{d=await(await fetch('/api/seong?seong='+encodeURIComponent(v))).json();}catch(e){return;}
+    if(d.ok&&d.multi){
+      sel.innerHTML=d.options.map(o=>'<option value="'+o.hanja+'">'+o.hanja+' ('+o.hoek+'획)</option>').join('');
+      box.style.display='block';
+    }else{box.style.display='none';sel.innerHTML='';}
+  },250);
+}
+function seongHanja(){const b=document.getElementById('nseonghjbox');return(b&&b.style.display!=='none')?document.getElementById('nseonghj').value:'';}
 async function runNaming(){
   const seong=document.getElementById('nseong').value.trim();
+  const seong_hanja=seongHanja();
   const date=document.getElementById('ndate').value,time=document.getElementById('ntime').value||'12:00';
   const gender=document.getElementById('ngender').value;
   if(!seong){alert('아기 성을 한 글자 넣어줘 (예: 김)');return;}
   if(!date){alert('아기 태어난 날을 넣어줘~');return;}
   document.getElementById('nspin').style.display='block';document.getElementById('nresult').innerHTML='';
   let d;
-  try{d=await(await fetch('/api/naming',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({seong,date,time,gender})})).json();}
+  try{d=await(await fetch('/api/naming',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({seong,seong_hanja,date,time,gender})})).json();}
   catch(e){document.getElementById('nspin').style.display='none';document.getElementById('nresult').innerHTML='<div class="ncard">오류가 났어. 다시 해줄래?</div>';return;}
   document.getElementById('nspin').style.display='none';
   if(d.error){document.getElementById('nresult').innerHTML='<div class="ncard">'+d.error+'</div>';return;}
   if(d.need_charge){
     let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
     document.getElementById('nresult').innerHTML='<div class="ncard"><div class="nmean">'+d.teaser+'</div><div class="pk">'+pk+'</div></div>';return;}
-  renderNaming(d.result,d.balance,{seong,date,time,gender});refreshBal();
+  renderNaming(d.result,d.balance,{seong,seong_hanja,date,time,gender});refreshBal();
   document.getElementById('nresult').scrollIntoView({behavior:'smooth'});
 }
 function renderNaming(r,balance,q){
@@ -510,11 +530,26 @@ def api_followup():
     return resp
 
 
+@app.route("/api/seong")
+def api_seong():
+    """한글/한자 성 -> 한자 선택지(여러 개면 프론트에서 고르게)."""
+    from hanja_db import normalize_seong, seong_options
+    raw = (request.args.get("seong") or "").strip()
+    kr = normalize_seong(raw)
+    if kr is None:
+        return jsonify({"ok": False})
+    opts = seong_options(kr)
+    return jsonify({"ok": True, "seong": kr,
+                    "options": [{"hanja": h, "hoek": k} for h, k in opts],
+                    "multi": len(opts) > 1})
+
+
 @app.route("/api/naming", methods=["POST"])
 def api_naming():
     """작명: 부채 5개(2,500원) 차감 → 정통 수리성명학 이름 후보 반환."""
     data = request.get_json(force=True)
     seong = (data.get("seong") or "").strip()
+    seong_hanja = data.get("seong_hanja") or None
     try:
         dt = datetime.strptime(f"{data['date']} {data.get('time','12:00')}", "%Y-%m-%d %H:%M")
     except Exception:
@@ -523,7 +558,7 @@ def api_naming():
 
     from naming_engine import generate_names
     # 성씨/입력 검증 먼저 (부채 차감 전에)
-    result = generate_names(seong, dt, gender)
+    result = generate_names(seong, dt, gender, seong_hanja=seong_hanja)
     if "error" in result:
         return jsonify({"error": result["error"]}), 400
     if not result["한자후보"]:
@@ -560,7 +595,8 @@ def api_naming_stream():
     except Exception:
         return Response("[생년월일 오류]", mimetype="text/plain; charset=utf-8")
     gender = data.get("gender", "M")
-    prompt, result = make_naming_prompt(seong, dt, gender)
+    seong_hanja = data.get("seong_hanja") or None
+    prompt, result = make_naming_prompt(seong, dt, gender, seong_hanja=seong_hanja)
     if prompt is None:
         return Response("[" + result.get("error", "오류") + "]", mimetype="text/plain; charset=utf-8")
 

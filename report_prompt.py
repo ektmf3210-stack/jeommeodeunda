@@ -168,9 +168,9 @@ def build_naming_prompt(result):
         "이제 공명이가 되어 작명 해설을 써주세요.")
 
 
-def make_naming_prompt(seong_kr, dt_birth, gender):
+def make_naming_prompt(seong_kr, dt_birth, gender, seong_hanja=None):
     from naming_engine import generate_names
-    result = generate_names(seong_kr, dt_birth, gender)
+    result = generate_names(seong_kr, dt_birth, gender, seong_hanja=seong_hanja)
     if "error" in result:
         return None, result
     return build_naming_prompt(result), result

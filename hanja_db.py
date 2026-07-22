@@ -26,6 +26,27 @@ SEONG = {
 # 한자 성씨 -> 한글 성 (한자로 입력해도 인식되게)
 SEONG_BY_HANJA = {}   # 파일 하단에서 채움
 
+# 같은 한글 성이지만 한자가 여럿인 경우 (획수 달라 사격이 바뀜) -> 선택지 제공
+# 각 항목: 한글 -> [(한자, 원획), ...]  (첫 번째가 가장 흔한 기본값)
+SEONG_VARIANTS = {
+    "정": [("鄭", 19), ("丁", 2)],
+    "강": [("姜", 9), ("康", 11)],
+    "조": [("趙", 14), ("曺", 11)],
+    "유": [("柳", 9), ("兪", 9), ("劉", 15)],
+    "임": [("林", 8), ("任", 6)],
+    "신": [("申", 5), ("辛", 7), ("愼", 14)],
+    "홍": [("洪", 10), ("弘", 5)],
+    "전": [("全", 6), ("田", 5), ("錢", 16)],
+    "장": [("張", 11), ("莊", 13), ("章", 11)],
+    "천": [("千", 3), ("天", 4)],
+    "양": [("梁", 11), ("楊", 13)],
+    "노": [("盧", 16), ("魯", 15)],
+    "하": [("河", 9), ("夏", 10)],
+    "구": [("具", 8), ("丘", 5)],
+    "우": [("禹", 9), ("于", 3)],
+    "주": [("朱", 6), ("周", 8)],
+}
+
 # 이름용 한자: 한글 음 -> [(한자, 뜻, 원획, 오행), ...]
 GIVEN = {
     # ----- 木 계열 많은 음 -----
@@ -170,9 +191,38 @@ def normalize_seong(text):
     c = t[0]
     if c in SEONG:
         return c
+    if c in SEONG_VARIANTS:
+        return c
     if c in SEONG_BY_HANJA:
         return SEONG_BY_HANJA[c]
     return None
+
+
+def seong_options(seong_kr):
+    """한글 성 -> [(한자, 원획), ...] 선택지. 하나뿐이면 리스트 길이 1."""
+    if seong_kr in SEONG_VARIANTS:
+        return list(SEONG_VARIANTS[seong_kr])
+    if seong_kr in SEONG:
+        return [SEONG[seong_kr]]
+    return []
+
+
+def resolve_seong(raw, chosen_hanja=None):
+    """입력(한글/한자) + 선택 한자 -> (한글, 한자, 원획). 못 찾으면 None."""
+    kr = normalize_seong(raw)
+    if kr is None:
+        return None
+    opts = seong_options(kr)
+    if not opts:
+        return None
+    # 사용자가 한자를 골랐거나, 아예 한자로 입력한 경우 그걸 우선
+    pick_hj = chosen_hanja or (raw.strip()[0] if raw and raw.strip()[0] in SEONG_BY_HANJA else None)
+    if pick_hj:
+        for hj, hk in opts:
+            if hj == pick_hj:
+                return (kr, hj, hk)
+    hj, hk = opts[0]
+    return (kr, hj, hk)
 
 
 if __name__ == "__main__":
