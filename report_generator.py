@@ -16,6 +16,7 @@ from datetime import datetime
 from saju_engine import compute_saju
 from qimen_full_reading import full_reading
 from qimen_engine import get_bazi, build_qimen
+import sinsal
 
 # ── 분야 정의 (8분야): 캐릭터·소개·응원일화·기문게이트 + 초점/말투/강조/특화조언 ──
 FIELDS = {
@@ -160,7 +161,10 @@ def generate_report_data(dt_birth, gender, field_key, target_year=None):
             "대운기간": f"{saju['현재대운']['시작연도']}~{saju['현재대운']['끝연도']}",
             "세운": (lambda y: f"{y['간지_kr']} {y['천간십성']}({THEME_KR.get(y['천간십성'],'')})" if y else "")(
                 next((y for y in saju.get("세운", []) if y["연도"] == target_year), None)),
+            "신살": [{"이름": n, "뜻": d} for n, d in sinsal.analyze(saju["팔자"], saju["일간"])],
         },
+        "연운": [f"{y['연도']}년 {y['간지_kr']} {y['천간십성']}({THEME_KR.get(y['천간십성'],'')})"
+                for y in saju.get("세운", []) if target_year <= y["연도"] < target_year + 10],
         "기문": {
             "최적월": months, "대표월": top_m,
             "요소": {k: v for k, v in qm.items() if v},
