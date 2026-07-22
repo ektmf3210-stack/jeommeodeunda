@@ -15,7 +15,7 @@ LLM 자동 리포트(선택):
   /api/report      사주·기문 계산 → 프롬프트 → (LLM) → 리포트
   /char/<file>     캐릭터 이미지
 """
-import os, base64, json as _json, uuid, urllib.request, urllib.error
+import os, base64, json as _json, uuid, urllib.request, urllib.error, hmac, hashlib, time
 from datetime import datetime
 from flask import (Flask, request, jsonify, render_template_string,
                    send_from_directory, redirect, Response, stream_with_context)
@@ -28,6 +28,32 @@ from buchae_system import (get_balance, open_report, charge_buchae,
                            can_open, BUCHAE_PACKAGES, get_or_create_user, grant_buchae)
 
 app = Flask(__name__)
+
+# ══════════ 건당 결제(990원) · 지갑 없이 1회용 서명 토큰 ══════════
+PRICE = 990
+PAID_ITEMS = {"report", "naming", "analysis", "followup"}
+ITEM_NAME = {"report": "사주 리포트", "naming": "작명", "analysis": "이름 분석", "followup": "추가 질문"}
+UNLOCK_SECRET = os.environ.get("UNLOCK_SECRET", "jeom2026-unlock-secret-change-me")
+
+
+def make_unlock(item, ttl=1800):
+    """결제 성공 시 발급하는 1회용(짧은 만료) 서명 토큰. 저장 안 함."""
+    exp = int(time.time()) + ttl
+    body = f"{item}.{exp}"
+    sig = hmac.new(UNLOCK_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()[:24]
+    return f"{body}.{sig}"
+
+
+def check_unlock(token, item):
+    """토큰이 이 상품에 유효하고 안 만료됐나."""
+    try:
+        it, exp, sig = (token or "").split(".")
+    except Exception:
+        return False
+    if it != item or int(exp) < time.time():
+        return False
+    good = hmac.new(UNLOCK_SECRET.encode(), f"{it}.{exp}".encode(), hashlib.sha256).hexdigest()[:24]
+    return hmac.compare_digest(sig, good)
 
 
 def current_user():
@@ -179,7 +205,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 
 <!-- 입력 -->
 <section class="screen" id="s-input">
-  <div class="top"><div class="bal" id="bal">🪭 부채 0</div>
+  <div class="top"><div class="bal" id="bal">🔎 건당 990원</div>
     <div class="logo">점며든다</div>
     <div class="slo">내 인생, <em>어떻게 이겨?</em> 🪭</div></div>
   <div class="secdiv"><span>🔎 이름 · 작명</span></div>
@@ -212,7 +238,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
     <div class="rowf"><div><input type="date" id="ndate"></div><div><input type="time" id="ntime"></div></div>
     <label>성별</label>
     <select id="ngender"><option value="M">남아</option><option value="F">여아</option></select>
-    <button class="go go2" onclick="runNaming()">🎏 이름 지어줘</button>
+    <button class="go go2" onclick="runNaming()">🎏 이름 짓기 · 990원</button>
   </div>
   <div class="spin" id="nspin">🎏 공명이가 획수를 세는 중…</div>
   <div id="nresult"></div>
@@ -229,7 +255,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
     <div class="rowf"><div><input type="date" id="adate"></div><div><input type="time" id="atime"></div></div>
     <label>성별</label>
     <select id="agender"><option value="F">여성</option><option value="M">남성</option></select>
-    <button class="go" style="background:var(--blue)" onclick="runAnalyze()">🔎 내 이름 진단</button>
+    <button class="go" style="background:var(--blue)" onclick="runAnalyze()">🔎 내 이름 진단 · 990원</button>
   </div>
   <div class="spin" id="aspin">🔎 공명이가 획수를 세는 중…</div>
   <div id="aresult"></div>
@@ -305,50 +331,72 @@ Object.entries(FIELDS).forEach(([k,v])=>{const d=document.createElement('div');
   d.onclick=()=>{sel=k;document.querySelectorAll('.fld').forEach(x=>x.classList.remove('on'));d.classList.add('on');};
   fbox.appendChild(d);});
 document.getElementById('date').value='1996-05-12';
+/* ── 결제 성공 후 복귀: 토큰으로 잠금해제하고 결과 생성 ── */
+function dispatchUnlock(item,input,u){
+  if(item==='report')doReport(input,u);
+  else if(item==='naming')doNaming(input,u);
+  else if(item==='analysis')doAnalyze(input,u);
+  else if(item==='followup')doFollowup(input,u);
+}
+(function(){
+  const P=new URLSearchParams(location.search);const u=P.get('u'),item=P.get('item');
+  if(!u||!item)return;
+  let pend={};try{pend=JSON.parse(sessionStorage.getItem('pending')||'{}');}catch(e){}
+  sessionStorage.removeItem('pending');
+  history.replaceState({},'',location.pathname);
+  const input=(pend.item===item)?pend.input:{};
+  toInput();
+  if(item==='naming')nameMenu('naming');
+  if(item==='analysis')nameMenu('analyze');
+  setTimeout(()=>dispatchUnlock(item,input,u),60);
+})();
 
-async function refreshBal(){const b=await (await fetch('/api/balance')).json();
-  document.getElementById('bal').textContent='🪭 부채 '+(b.balance||0);}
-function charge(pkg){ location.href='/pay?pkg='+encodeURIComponent(pkg); }
+function refreshBal(){const b=document.getElementById('bal');if(b)b.textContent='🔎 건당 990원';}
+function payFor(item,input){sessionStorage.setItem('pending',JSON.stringify({item:item,input:input}));location.href='/pay?item='+item;}
 
 async function run(){
-  const date=document.getElementById('date').value,time=document.getElementById('time').value,gender=document.getElementById('gender').value;
-  if(!date){alert('태어난 날을 넣어줘~');return;}
+  const inp={date:document.getElementById('date').value,time:document.getElementById('time').value,gender:document.getElementById('gender').value,field:sel};
+  if(!inp.date){alert('태어난 날을 넣어줘~');return;}
   document.getElementById('spin').style.display='block';document.getElementById('result').innerHTML='';
-  const d=await (await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,gender,field:sel})})).json();
-  document.getElementById('spin').style.display='none';render(d);refreshBal();
+  const d=await (await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(inp)})).json();
+  document.getElementById('spin').style.display='none';d._input=inp;renderReport(d,null);
   document.getElementById('result').scrollIntoView({behavior:'smooth'});
 }
-
-function render(d){
+async function doReport(input,unlock){
+  sel=input.field||sel;
+  ['date','time','gender'].forEach(k=>{const el=document.getElementById(k);if(el&&input[k])el.value=input[k];});
+  document.getElementById('spin').style.display='block';document.getElementById('result').innerHTML='';
+  const d=await (await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)})).json();
+  document.getElementById('spin').style.display='none';d._input=input;renderReport(d,unlock);
+  document.getElementById('result').scrollIntoView({behavior:'smooth'});
+}
+function renderReport(d,unlock){
   const R=document.getElementById('result');
   if(d.error){R.innerHTML='<div class="card">오류: '+d.error+'</div>';return;}
   const img='/char/'+(CHAR[sel]||'gongmyeong')+'.png';
   let h='<div class="rp"><div class="hero"><div class="disc"><img class="hava" src="'+img+'"></div>'
     +'<div><span class="tag">'+(ICON[sel]||'🪭')+' '+d.field+'</span><div class="who2">'+d.char+'</div></div></div>';
   h+='<div class="judge"><span class="lb">✦ 네 판 · 무료로 슬쩍</span>'+d.saju_line+'</div>';
-  const locked=d.need_charge;
-  if(locked){
+  const paid=unlock||d.free;
+  if(!paid){
     let rows='';(d.hook||[]).forEach(e=>{rows+='<div class="hr"><span class="k">'+e.label+'</span><span class="v">'+e.text+'</span></div>';});
-    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
-    let cta='<div class="pk">'+pk+'</div>';
     h+='<div class="hookwrap"><div class="htitle">그래서 <em>언제·어디·어떻게?</em> 👀</div>'
       +'<div class="blur">'+rows+'</div>'
-      +'<div class="pw"><div class="plock">🔒 여기부턴 부채 까고!</div><div class="pmsg">'+d.teaser+'</div>'+cta+'</div></div>';
+      +'<div class="pw"><div class="plock">🔒 여기부턴 결제하고!</div><div class="pmsg">'+d.char+'의 전체 리포트를 딱 열어줄게</div>'
+      +'<button class="go" onclick=\'payFor("report",'+JSON.stringify(d._input)+')\'>🔓 전체 리포트 · 990원</button></div></div>';
   }else{
-    h+='<div class="rpt" id="rpt"><span class="cur">▍</span></div><div class="tagf" id="tagf">🪭 '+d.char+'가 지금 붓을 들었어… 실시간으로 써지는 중</div>';
-    h+='<div class="fu" id="fubox" style="display:none"><div class="futitle">🪭 '+d.char+'한테 더 궁금한 거 있어? <span>부채 1개·500원</span></div>'
+    h+='<div class="rpt" id="rpt"><span class="cur">▍</span></div><div class="tagf" id="tagf">🪭 '+d.char+'가 붓을 들었어… 실시간으로 써지는 중</div>';
+    h+='<div class="fu" id="fubox" style="display:none"><div class="futitle">🪭 '+d.char+'한테 더 궁금한 거? <span>건당 990원</span></div>'
       +'<div id="fulog"></div>'
       +'<div class="furow"><input id="fuq" placeholder="예) 올해 이직해도 될까?" onkeydown="if(event.key===\'Enter\')askFollow()"><button onclick="askFollow()">보내기</button></div></div>';
   }
   h+='</div>';R.innerHTML=h;
-  if(!locked && d.ready){streamReport(d);}
+  if(paid){window._lastReportInput=d._input;streamReport(d._input,unlock);}
 }
-async function streamReport(d){
-  const rpt=document.getElementById('rpt');const tagf=document.getElementById('tagf');
-  const date=document.getElementById('date').value,time=document.getElementById('time').value,gender=document.getElementById('gender').value;
-  let txt='';
+async function streamReport(input,unlock){
+  const rpt=document.getElementById('rpt');const tagf=document.getElementById('tagf');let txt='';
   try{
-    const resp=await fetch('/api/report_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,gender,field:sel})});
+    const resp=await fetch('/api/report_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...input,unlock:unlock})});
     const reader=resp.body.getReader();const dec=new TextDecoder();
     const near=()=>window.innerHeight+window.scrollY>=document.body.scrollHeight-160;
     while(true){const {done,value}=await reader.read();if(done)break;
@@ -357,10 +405,9 @@ async function streamReport(d){
       if(near())window.scrollTo(0,document.body.scrollHeight);
     }
     rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-  }catch(e){rpt.innerHTML=txt+'<br>(전송이 끊겼어. 새로고침 없이 다시 눌러줘)';}
-  tagf.textContent=(d.engine_note||'')+' · 남은 부채 '+d.balance+'개';
+  }catch(e){rpt.innerHTML=txt+'<br>(전송이 끊겼어. 다시 눌러줘)';}
+  tagf.textContent='해석 완료 · 점며든다';
   const fb=document.getElementById('fubox');if(fb)fb.style.display='block';
-  refreshBal();
 }
 let seongTimer=null;
 async function checkSeong(){
@@ -392,7 +439,7 @@ function namingMode(){
   if(m==='single')return{single:true,fixed:fx};
   return{};
 }
-async function runNaming(){
+function runNaming(){
   const seong=document.getElementById('nseong').value.trim();
   const seong_hanja=seongHanja();
   const date=document.getElementById('ndate').value,time=document.getElementById('ntime').value||'12:00';
@@ -401,20 +448,20 @@ async function runNaming(){
   if(!seong){alert('아기 성을 한 글자 넣어줘 (예: 김)');return;}
   if(!date){alert('아기 태어난 날을 넣어줘~');return;}
   if((mode.fixed_pos)&&!mode.fixed){alert('넣을 글자를 입력해줘 (예: 준)');return;}
+  payFor('naming',{seong,seong_hanja,date,time,gender,...mode});
+}
+async function doNaming(input,unlock){
   document.getElementById('nspin').style.display='block';document.getElementById('nresult').innerHTML='';
-  const body={seong,seong_hanja,date,time,gender,...mode};
   let d;
-  try{d=await(await fetch('/api/naming',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();}
+  try{d=await(await fetch('/api/naming',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...input,unlock:unlock})})).json();}
   catch(e){document.getElementById('nspin').style.display='none';document.getElementById('nresult').innerHTML='<div class="ncard">오류가 났어. 다시 해줄래?</div>';return;}
   document.getElementById('nspin').style.display='none';
   if(d.error){document.getElementById('nresult').innerHTML='<div class="ncard">'+d.error+'</div>';return;}
-  if(d.need_charge){
-    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
-    document.getElementById('nresult').innerHTML='<div class="ncard"><div class="nmean">'+d.teaser+'</div><div class="pk">'+pk+'</div></div>';return;}
-  renderNaming(d.result,d.balance,{seong,seong_hanja,date,time,gender,...mode});refreshBal();
+  if(d.need_pay){document.getElementById('nresult').innerHTML='<div class="ncard">결제 확인이 안 됐어. 다시 시도해줘.</div>';return;}
+  renderNaming(d.result,{...input,unlock:unlock});
   document.getElementById('nresult').scrollIntoView({behavior:'smooth'});
 }
-function renderNaming(r,balance,q){
+function renderNaming(r,q){
   const KR={원격:'초년',형격:'청년',이격:'장년',정격:'말년'};
   let h='<div class="ncard" style="background:#eef3ff"><div class="nmean">🎏 아기 사주(일간 <b>'+r.사주.일간+'</b>)에 <b>'+(r.사주.부족오행.join(', ')||'큰 부족 없')+'</b> 기운이 부족해서, 그걸 채우는 이름으로 골랐어</div></div>';
   r.한자후보.forEach(c=>{
@@ -425,9 +472,9 @@ function renderNaming(r,balance,q){
   });
   h+='<div class="rpt" id="nrpt"><span class="cur">▍</span></div><div class="tagf" id="ntagf">🎏 공명이가 이름 풀이 쓰는 중…</div>';
   document.getElementById('nresult').innerHTML=h;
-  streamNaming(r,q,balance);
+  streamNaming(r,q);
 }
-async function streamNaming(r,q,balance){
+async function streamNaming(r,q){
   const rpt=document.getElementById('nrpt'),tagf=document.getElementById('ntagf');let txt='';
   try{
     const resp=await fetch('/api/naming_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...q,result:r})});
@@ -436,7 +483,7 @@ async function streamNaming(r,q,balance){
       rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';}
     rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
   }catch(e){rpt.innerHTML=txt+'<br>(풀이 전송이 끊겼어)';}
-  tagf.textContent='🎏 정통 수리성명학 · 남은 부채 '+balance+'개';
+  tagf.textContent='🎏 정통 수리성명학 · 점며든다';
 }
 function nameMenu(which){
   const map={naming:'nmbN',analyze:'nmbA',pop:'nmbP'};
@@ -463,27 +510,28 @@ function popTab(g){
   h+='</div><div class="poprc">'+POP.source+'</div>';
   document.getElementById('poplist').innerHTML=h;
 }
-async function runAnalyze(){
+function runAnalyze(){
   const name=document.getElementById('aname').value.trim();
   const hanja=document.getElementById('ahanja').value.trim();
   const date=document.getElementById('adate').value,time=document.getElementById('atime').value||'12:00';
   const gender=document.getElementById('agender').value;
-  if(!name){alert('이름을 한글로 넣어줘 (예: 김다슬)');return;}
+  if(!name){alert('이름을 한글로 넣어줘 (예: 홍길동)');return;}
   if(!date){alert('태어난 날을 넣어줘~');return;}
+  payFor('analysis',{name,hanja,date,time,gender});
+}
+async function doAnalyze(input,unlock){
   document.getElementById('aspin').style.display='block';document.getElementById('aresult').innerHTML='';
   let d;
-  try{d=await(await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,hanja,date,time,gender})})).json();}
+  try{d=await(await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...input,unlock:unlock})})).json();}
   catch(e){document.getElementById('aspin').style.display='none';document.getElementById('aresult').innerHTML='<div class="ncard">오류가 났어. 다시 해줄래?</div>';return;}
   document.getElementById('aspin').style.display='none';
   if(d.error){document.getElementById('aresult').innerHTML='<div class="ncard">'+d.error+'</div>';return;}
-  if(d.need_charge){
-    let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
-    document.getElementById('aresult').innerHTML='<div class="ncard"><div class="nmean">'+d.teaser+'</div><div class="pk">'+pk+'</div></div>';return;}
-  renderAnalyze(d.result,d.balance,{name,hanja,date,time,gender});refreshBal();
+  if(d.need_pay){document.getElementById('aresult').innerHTML='<div class="ncard">결제 확인이 안 됐어. 다시 시도해줘.</div>';return;}
+  renderAnalyze(d.result,{...input,unlock:unlock});
   document.getElementById('aresult').scrollIntoView({behavior:'smooth'});
 }
 let lastAnalysis=null;
-function renderAnalyze(r,balance,q){
+function renderAnalyze(r,q){
   lastAnalysis=r;
   const eum=r.발음오행,sj=r.사주;
   const badge={'좋음':'#2fbf71','무난':'#5b8def','아쉬움':'#e0a020','부딪힘':'#e0489b'}[eum.등급]||'#888';
@@ -501,7 +549,7 @@ function renderAnalyze(r,balance,q){
   h+='<button class="go" style="background:linear-gradient(90deg,#ff2e86,#7b5bff);margin-top:10px" onclick="shareCard()">📸 결과 이미지로 저장 · 공유</button>';
   h+='<div class="rpt" id="arpt"><span class="cur">▍</span></div><div class="tagf" id="atagf">🔎 공명이가 감정 쓰는 중…</div>';
   document.getElementById('aresult').innerHTML=h;
-  streamAnalyze(q,balance);
+  streamAnalyze(q);
 }
 function _rr(x,X,Y,w,h,r){x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+w,Y,X+w,Y+h,r);x.arcTo(X+w,Y+h,X,Y+h,r);x.arcTo(X,Y+h,X,Y,r);x.arcTo(X,Y,X+w,Y,r);x.closePath();}
 async function shareCard(){
@@ -545,7 +593,7 @@ async function shareCard(){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='점며든다_이름풀이.png';a.click();
   },'image/png');
 }
-async function streamAnalyze(q,balance){
+async function streamAnalyze(q){
   const rpt=document.getElementById('arpt'),tagf=document.getElementById('atagf');let txt='';
   try{
     const resp=await fetch('/api/analyze_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});
@@ -554,32 +602,30 @@ async function streamAnalyze(q,balance){
       rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';}
     rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
   }catch(e){rpt.innerHTML=txt+'<br>(전송이 끊겼어)';}
-  tagf.textContent='🔎 성명 감정 · 남은 부채 '+balance+'개';
+  tagf.textContent='🔎 성명 감정 · 점며든다';
 }
 function addFu(who,text,char){const log=document.getElementById('fulog');if(!log)return null;
   const b=document.createElement('div');b.className='fubub '+(who==='me'?'me':'ch');
   b.innerHTML=(who==='me'?'':(char?'<b>'+char+'</b><br>':''))+text;
   log.appendChild(b);b.scrollIntoView({behavior:'smooth',block:'nearest'});return b;}
-async function askFollow(){
+function askFollow(){
   const el=document.getElementById('fuq');const q=(el.value||'').trim();if(!q)return;
-  const date=document.getElementById('date').value,time=document.getElementById('time').value,gender=document.getElementById('gender').value;
-  el.value='';addFu('me',q);
-  const body={date,time,gender,field:sel,question:q};
-  let d;try{d=await(await fetch('/api/followup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();}catch(e){addFu('ch','(오류가 났어. 다시 해봐)','');return;}
-  if(d.error){addFu('ch','('+d.error+')',d.char);return;}
-  if(d.need_charge){let pk='';for(const[k,v]of Object.entries(d.packages)){pk+='<div class="pkg'+(v.best?' best':'')+'" onclick="charge(\''+k+'\')"><div class="n">'+v.buchae+'부채</div><div class="w">'+v.won.toLocaleString()+'원</div>'+(v.tag?'<div class="ptag">'+v.tag+'</div>':'')+'</div>';}
-    addFu('ch',d.teaser+'<div class="pk" style="margin-top:8px">'+pk+'</div>',d.char);return;}
-  // 실시간 스트리밍으로 답변
-  const bubble=addFu('ch','<span class="cur">▍</span>',d.char);let txt='';
+  const base=window._lastReportInput||{date:document.getElementById('date').value,time:document.getElementById('time').value,gender:document.getElementById('gender').value,field:sel};
+  payFor('followup',{date:base.date,time:base.time,gender:base.gender,field:base.field||sel,question:q});
+}
+async function doFollowup(input,unlock){
+  const R=document.getElementById('result');
+  R.innerHTML='<div class="rp"><div class="judge"><span class="lb">🪭 추가 질문</span>'+(input.question||'')+'</div>'
+    +'<div class="rpt" id="rpt2"><span class="cur">▍</span></div><div class="tagf">해석엔진 실시간 · 점며든다</div></div>';
+  R.scrollIntoView({behavior:'smooth'});
+  const rpt=document.getElementById('rpt2');let txt='';
   try{
-    const resp=await fetch('/api/followup_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const resp=await fetch('/api/followup_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...input,unlock:unlock})});
     const reader=resp.body.getReader(),dec=new TextDecoder();
     while(true){const {done,value}=await reader.read();if(done)break;txt+=dec.decode(value,{stream:true});
-      bubble.innerHTML='<b>'+d.char+'</b><br>'+txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';
-      bubble.scrollIntoView({behavior:'smooth',block:'nearest'});}
-    bubble.innerHTML='<b>'+d.char+'</b><br>'+txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-  }catch(e){bubble.innerHTML+='<br>(전송이 끊겼어)';}
-  refreshBal();
+      rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')+'<span class="cur">▍</span>';}
+    rpt.innerHTML=txt.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  }catch(e){rpt.innerHTML=txt+'<br>(전송이 끊겼어)';}
 }
 </script></body></html>"""
 
@@ -604,31 +650,16 @@ def char(fn):
 
 
 @app.route("/dev")
-def dev_topup():
-    """개발용 부채 충전. 예: /dev?code=비밀코드&n=20  (결제 없이 테스트)."""
-    from flask import make_response
+def dev_unlock():
+    """개발용: 결제 없이 잠금해제 토큰 발급. 예: /dev?code=비밀코드&item=naming"""
     code = request.args.get("code", "")
     secret = os.environ.get("DEV_CODE", "jeom2026-gongmyeong")
     if code != secret:
         return "🔒 코드가 틀렸어", 403
-    try:
-        n = min(int(request.args.get("n", 20)), 200)
-    except Exception:
-        n = 20
-    uid = current_user()
-    set_ck = None
-    if not uid:
-        uid = "guest_" + uuid.uuid4().hex[:10]
-        set_ck = uid
-    bal = grant_buchae(uid, n)
-    resp = make_response(
-        f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        f"<div style='font-family:sans-serif;padding:40px;text-align:center'>"
-        f"<h2>🪭 부채 {n}개 충전 완료</h2><p>현재 잔액: <b>{bal}개</b></p>"
-        f"<p><a href='/'>홈으로 가서 작명/분석 눌러보기 →</a></p></div>")
-    if set_ck:
-        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-    return resp
+    item = request.args.get("item", "analysis")
+    if item not in PAID_ITEMS:
+        item = "analysis"
+    return redirect(f"/?u={make_unlock(item)}&item={item}")
 
 
 @app.route("/api/report", methods=["POST"])
@@ -658,31 +689,9 @@ def api_report():
         return {"char": facts["캐릭터"], "field": facts["분야"], "summary": summary,
                 "saju_line": saju_line, "hook": hook, "best_month": best_month}
 
-    # 로그인 없이 진행 — 쿠키 게스트 지갑 자동 (첫 리포트 무료)
-    # ★여기선 '열 수 있는지'만 확인(부채 차감/LLM 생성 안 함).
-    #   실제 차감+생성은 /api/report_stream 에서 실시간 스트리밍으로 처리.
-    uid = current_user()
-    set_ck = None
-    if not uid:
-        uid = "guest_" + uuid.uuid4().hex[:10]
-        set_ck = uid
-    get_or_create_user(uid)
-    chk = can_open(uid, field)
-    if not chk["ok"]:
-        resp = jsonify({**base(), "locked": True, "need_charge": True,
-                        "balance": chk["balance"], "cost": chk["cost"], "packages": BUCHAE_PACKAGES,
-                        "teaser": f"부채 <em>1개 500원</em>이면<br>{facts['캐릭터']} 리포트가 딱 열려!"})
-        if set_ck:
-            resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-        return resp
-
-    # 열람 가능 — 프론트가 곧바로 /api/report_stream 을 열어 실시간 생성
-    resp = jsonify({**base(), "locked": False, "ready": True,
-                    "engine_note": "해석엔진: 실시간 · 계산: 검증된 엔진",
-                    "balance": chk.get("balance", get_balance(uid))})
-    if set_ck:
-        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-    return resp
+    # 무료 미리보기(판/훅)만 반환. 전체 리포트는 990원 결제 후 stream.
+    return jsonify({**base(), "engine_note": "해석엔진: 실시간 · 계산: 검증된 엔진",
+                    "free": (field == "today"), "price": PRICE})
 
 
 @app.route("/api/report_stream", methods=["POST"])
@@ -698,14 +707,11 @@ def api_report_stream():
     if field not in FIELDS:
         return Response("[알 수 없는 분야]", mimetype="text/plain; charset=utf-8")
 
+    # 오늘의운세는 무료, 나머지는 990원 결제 토큰 필요
+    if field != "today" and not check_unlock(data.get("unlock"), "report"):
+        return Response("[결제가 필요해요. 새로고침 후 다시 눌러줘]", mimetype="text/plain; charset=utf-8")
+
     prompt, facts = make_full_prompt(dt, gender, field)
-    uid = current_user()
-    if not uid:
-        uid = "guest_" + uuid.uuid4().hex[:10]
-    get_or_create_user(uid)
-    opened = open_report(uid, field)   # ★여기서 부채 차감
-    if not opened["ok"]:
-        return Response("[부채가 부족해요. 새로고침 후 충전해줘]", mimetype="text/plain; charset=utf-8")
 
     def gen():
         for piece in stream_interpretation(prompt):
@@ -768,14 +774,9 @@ def api_followup_stream():
         return Response("[날짜 형식 오류]", mimetype="text/plain; charset=utf-8")
     if not question:
         return Response("[질문을 입력해줘]", mimetype="text/plain; charset=utf-8")
+    if not check_unlock(data.get("unlock"), "followup"):
+        return Response("[결제가 필요해요. 새로고침 후 다시 물어봐]", mimetype="text/plain; charset=utf-8")
     prompt, _facts = make_followup_prompt(dt, gender, field, question)
-    uid = current_user()
-    if not uid:
-        uid = "guest_" + uuid.uuid4().hex[:10]
-    get_or_create_user(uid)
-    opened = open_report(uid, "followup")   # 부채 1개 차감
-    if not opened["ok"]:
-        return Response("[부채가 부족해요. 새로고침 후 충전해줘]", mimetype="text/plain; charset=utf-8")
 
     def gen():
         for piece in stream_interpretation(prompt):
@@ -803,25 +804,9 @@ def api_analyze():
     if "error" in result:
         return jsonify({"error": result["error"]}), 400
 
-    uid = current_user()
-    set_ck = None
-    if not uid:
-        uid = "guest_" + uuid.uuid4().hex[:10]
-        set_ck = uid
-    get_or_create_user(uid)
-    chk = can_open(uid, "analysis")
-    if not chk["ok"]:
-        resp = jsonify({"need_charge": True, "balance": chk["balance"], "cost": chk["cost"],
-                        "packages": BUCHAE_PACKAGES,
-                        "teaser": "이름 분석은 <em>부채 2개(1,000원)</em>! 네 이름 장단점 싹 진단해줄게"})
-        if set_ck:
-            resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-        return resp
-    opened = open_report(uid, "analysis")   # 부채 2개 차감
-    resp = jsonify({"ok": True, "result": result, "balance": opened["balance"]})
-    if set_ck:
-        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-    return resp
+    if not check_unlock(data.get("unlock"), "analysis"):
+        return jsonify({"need_pay": True, "item": "analysis", "price": PRICE}), 402
+    return jsonify({"ok": True, "result": result})
 
 
 @app.route("/api/analyze_stream", methods=["POST"])
@@ -893,25 +878,9 @@ def api_naming():
     if not result["한자후보"]:
         return jsonify({"error": "조건에 맞는 이름을 못 찾았어. 시간을 넣거나 다른 성씨로 해줄래?"}), 400
 
-    uid = current_user()
-    set_ck = None
-    if not uid:
-        uid = "guest_" + uuid.uuid4().hex[:10]
-        set_ck = uid
-    get_or_create_user(uid)
-    chk = can_open(uid, "naming")
-    if not chk["ok"]:
-        resp = jsonify({"need_charge": True, "balance": chk["balance"], "cost": chk["cost"],
-                        "packages": BUCHAE_PACKAGES,
-                        "teaser": "작명은 <em>부채 5개(2,500원)</em>! 사주 맞춘 이름 후보가 좍 나와"})
-        if set_ck:
-            resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-        return resp
-    opened = open_report(uid, "naming")   # 부채 5개 차감
-    resp = jsonify({"ok": True, "result": result, "balance": opened["balance"]})
-    if set_ck:
-        resp.set_cookie("uid", set_ck, max_age=60 * 60 * 24 * 365)
-    return resp
+    if not check_unlock(data.get("unlock"), "naming"):
+        return jsonify({"need_pay": True, "item": "naming", "price": PRICE}), 402
+    return jsonify({"ok": True, "result": result})
 
 
 @app.route("/api/naming_stream", methods=["POST"])
@@ -1021,7 +990,7 @@ background:linear-gradient(180deg,#ff8fd0,#8b7bff 50%,#37e0c8);-webkit-backgroun
 .note{font-size:11px;color:#6b5a8a;text-align:center;margin-top:10px;line-height:1.6}
 </style></head><body><div class="ph">
 <div class="logo">점며든다</div>
-<div class="sum"><div class="b">__BUCHAE__부채</div><div class="w">결제 금액 __WON__원</div></div>
+<div class="sum"><div class="b">__ITEMNAME__</div><div class="w">결제 금액 __WON__원 · 결제하면 결과가 바로 나와요</div></div>
 <div class="box" id="payment-method"></div>
 <div class="box" id="agreement"></div>
 <button class="cta" id="paybtn">🪭 __WON__원 결제하기</button>
@@ -1039,7 +1008,7 @@ document.getElementById("paybtn").onclick = async () => {
   try {
     await widgets.requestPayment({
       orderId: "__OID__", orderName: "__ONAME__",
-      successUrl: location.origin + "/pay/success?pkg=__PKG__",
+      successUrl: location.origin + "/pay/success?item=__ITEM__",
       failUrl: location.origin + "/pay/fail",
     });
   } catch (e) { alert("결제를 취소했거나 오류가 났어요."); }
@@ -1066,40 +1035,34 @@ def _result(emoji, title, msg, color="#ff2e86"):
 
 @app.route("/pay")
 def pay():
-    pkg = request.args.get("pkg", "fan_3")
-    if pkg not in BUCHAE_PACKAGES:
-        return _result("😵", "잘못된 상품", "존재하지 않는 부채 상품이에요.")
-    p = BUCHAE_PACKAGES[pkg]
+    item = request.args.get("item", "")
+    if item not in PAID_ITEMS:
+        return _result("😵", "잘못된 접근", "상품 정보가 없어요.")
     uid = current_user() or ("guest_" + uuid.uuid4().hex[:8])
     order_id = "jmd_" + uuid.uuid4().hex[:20]
     html = (PAY_PAGE.replace("__CK__", TOSS_CLIENT_KEY).replace("__CUST__", uid)
-            .replace("__AMT__", str(p["won"])).replace("__OID__", order_id)
-            .replace("__ONAME__", f"점며든다 {p['buchae']}부채").replace("__PKG__", pkg)
-            .replace("__BUCHAE__", str(p["buchae"])).replace("__WON__", f"{p['won']:,}"))
+            .replace("__AMT__", str(PRICE)).replace("__OID__", order_id)
+            .replace("__ONAME__", f"점며든다 {ITEM_NAME[item]}").replace("__ITEM__", item)
+            .replace("__ITEMNAME__", ITEM_NAME[item]).replace("__WON__", f"{PRICE:,}"))
     return render_template_string(html)
 
 
 @app.route("/pay/success")
 def pay_success():
-    pkg = request.args.get("pkg", "")
+    item = request.args.get("item", "")
     payment_key = request.args.get("paymentKey", "")
     order_id = request.args.get("orderId", "")
     amount = request.args.get("amount", "0")
-    if pkg not in BUCHAE_PACKAGES:
+    if item not in PAID_ITEMS:
         return _result("😵", "결제 확인 실패", "상품 정보를 확인할 수 없어요.")
-    # 금액 위변조 방지: 서버 가격과 대조
-    if int(amount) != BUCHAE_PACKAGES[pkg]["won"]:
+    if int(amount) != PRICE:   # 금액 위변조 방지
         return _result("🚫", "금액이 맞지 않아요", "결제 금액이 상품 가격과 달라 취소했어요.")
     res, err = toss_confirm(payment_key, order_id, amount)
     if err:
         return _result("😢", "결제 승인 실패", err.get("message", "다시 시도해 주세요."))
-    uid = current_user()
-    if not uid:
-        return _result("🙃", "로그인이 필요해요", "결제는 됐지만 로그인 세션이 없어요. 문의 주세요.")
-    charge_buchae(uid, pkg, paid=True)
-    bal = get_balance(uid)
-    return _result("🎉", "충전 완료!",
-                   f"{BUCHAE_PACKAGES[pkg]['buchae']}부채가 들어왔어요. 지금 부채 {bal}개!", color="#2b2bff")
+    # 결제 성공 → 1회용 잠금해제 토큰 발급해 앱으로 복귀 (저장 없음)
+    token = make_unlock(item)
+    return redirect(f"/?u={token}&item={item}")
 
 
 @app.route("/pay/fail")
