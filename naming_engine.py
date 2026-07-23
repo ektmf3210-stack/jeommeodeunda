@@ -11,7 +11,7 @@ import random
 from datetime import datetime
 from suri import four_gyeok, four_gyeok_single
 from hanja_db import (SEONG, GIVEN, eum_ohaeng, normalize_seong, resolve_seong,
-                      gender_ok, ending_ok, ENDING_ONLY, PRETTY)
+                      gender_ok, ending_ok, ENDING_ONLY, PRETTY, TRENDY)
 from saju_engine import compute_saju
 
 KR2HANJA = {"목": "木", "화": "火", "토": "土", "금": "金", "수": "水"}
@@ -153,7 +153,7 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
             eo1 = eum_ohaeng(e1)
             flow, geuk = _flow([s_oh, eo1])
             bo = [o for o in (oh1,) if o in need]
-            score = flow + len(bo) * 5 + _grade_bonus(fg, ("원격", "정격"))
+            score = flow + len(bo) * 5 + _grade_bonus(fg, ("원격", "정격")) + (9 if e1 in TRENDY else 0)
             cands.append({
                 "이름": e1, "한자": h1, "훈": [hun1], "획수": [hk1],
                 "자원오행": [oh1], "발음오행": [s_oh, eo1], "보완오행": bo, "_geuk": geuk,
@@ -176,7 +176,8 @@ def generate_names(seong_kr, dt_birth, gender, top=6, seong_hanja=None,
                 eo2 = eum_ohaeng(e2)
                 flow, geuk = _flow([s_oh, eo1, eo2])
                 bo = [o for o in (oh1, oh2) if o in need]
-                score = flow + len(bo) * 5 + _grade_bonus(fg, ("원격", "형격", "이격", "정격"))
+                score = (flow + len(bo) * 5 + _grade_bonus(fg, ("원격", "형격", "이격", "정격"))
+                         + sum(9 for _e in (e1, e2) if _e in TRENDY))
                 cands.append({
                     "이름": e1 + e2, "한자": h1 + h2, "훈": [hun1, hun2],
                     "획수": [hk1, hk2], "자원오행": [oh1, oh2],
