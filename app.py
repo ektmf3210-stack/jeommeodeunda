@@ -280,7 +280,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
   <div class="spin" id="spin">🪭 공명이가 부채를 펼치는 중…</div>
   <div id="result"></div>
-  <p class="foot">전통 술수 기반 참고·오락용 · 계산은 검증된 엔진, 해석은 AI<br>중요한 결정은 본인 판단으로!</p>
+  <p class="foot">전통 술수 기반 참고·오락용 · 계산은 검증된 엔진, 해석은 AI<br>중요한 결정은 본인 판단으로!<br><a href="/policy" style="color:#8a7ba5;text-decoration:underline">이용약관 · 개인정보처리방침 · 환불정책</a></p>
 </section>
 
 </div>
@@ -1075,6 +1075,88 @@ def pay_success():
 def pay_fail():
     msg = request.args.get("message", "결제가 취소됐거나 실패했어요.")
     return _result("🥲", "결제 실패", msg)
+
+
+# ══════════ 법적 고지 (이용약관·개인정보·환불) ══════════
+BIZ = {  # ★오픈 전 Railway 환경변수(BIZ_*)로 실제 사업자 정보 입력
+    "상호": os.environ.get("BIZ_NAME", "점며든다"),
+    "대표자": os.environ.get("BIZ_CEO", "(대표자명)"),
+    "사업자번호": os.environ.get("BIZ_REGNO", "(사업자등록번호)"),
+    "통신판매": os.environ.get("BIZ_MAILORDER", "(통신판매업 신고번호)"),
+    "주소": os.environ.get("BIZ_ADDR", "(사업장 주소)"),
+    "이메일": os.environ.get("BIZ_EMAIL", "ektmf3210@gmail.com"),
+}
+POLICY_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>점며든다 · 약관 및 정책</title>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>body{font-family:'Noto Sans KR',sans-serif;color:#241056;max-width:760px;margin:0 auto;padding:24px 18px 60px;line-height:1.75;
+background:linear-gradient(165deg,#eef1ff,#fff2f8)}
+h1{font-family:'Black Han Sans';font-size:24px;margin:8px 0 6px}
+h2{font-family:'Black Han Sans';font-size:18px;margin:30px 0 8px;padding-top:14px;border-top:2px dashed #cbb9ee}
+h3{font-size:15px;margin:16px 0 4px;color:#5b2e9a}
+p,li{font-size:13.5px;color:#3a2e5a}ul{padding-left:18px;margin:4px 0}
+.top{font-size:12px;color:#8a7ba5;margin-bottom:14px}
+a{color:#ff2e86}.biz{background:#fffdf7;border:2px solid #241056;border-radius:12px;padding:12px 14px;font-size:12.5px;margin:10px 0}
+.home{display:inline-block;margin-top:24px;padding:10px 18px;border:2.5px solid #241056;border-radius:12px;background:#2b2bff;color:#fff;font-weight:700;text-decoration:none}
+</style></head><body>
+<h1>🪭 점며든다 이용약관 · 개인정보처리방침 · 환불정책</h1>
+<div class="top">시행일: 2026-07-23 · 본 서비스는 전통 술수(사주·기문·성명학) 기반의 <b>참고·오락용</b> 콘텐츠입니다.</div>
+
+<div class="biz">
+<b>사업자 정보</b><br>
+상호: %(상호)s / 대표자: %(대표자)s<br>
+사업자등록번호: %(사업자번호)s / 통신판매업신고: %(통신판매)s<br>
+주소: %(주소)s / 문의: %(이메일)s
+</div>
+
+<h2>제1장 이용약관</h2>
+<h3>제1조 (목적)</h3>
+<p>본 약관은 '점며든다'(이하 "서비스")가 제공하는 사주·기문·작명·이름분석 등 콘텐츠의 이용조건 및 절차, 회사와 이용자의 권리·의무를 규정함을 목적으로 합니다.</p>
+<h3>제2조 (서비스의 성격)</h3>
+<ul><li>본 서비스가 제공하는 모든 해석·이름·운세는 전통 술수에 기반한 <b>참고 및 오락 목적</b>의 정보이며, 과학적·의학적·법적 사실이나 미래에 대한 보장이 아닙니다.</li>
+<li>이용자는 취업·투자·건강·결혼·작명 등 중요한 의사결정을 본인의 판단과 책임하에 하여야 하며, 회사는 그 결과에 대해 법적 책임을 지지 않습니다.</li></ul>
+<h3>제3조 (이용 및 결제)</h3>
+<ul><li>본 서비스는 회원가입 없이 이용할 수 있으며, 일부 콘텐츠(오늘의 운세, 인기 이름 순위 등)는 무료로 제공됩니다.</li>
+<li>유료 콘텐츠는 건별 결제(현재 건당 990원) 방식이며, 결제는 토스페이먼츠를 통해 처리됩니다.</li>
+<li>결제 완료 즉시 해당 콘텐츠가 생성·제공됩니다.</li></ul>
+<h3>제4조 (금지행위)</h3>
+<p>이용자는 서비스의 콘텐츠를 무단 복제·배포·상업적 이용하거나, 비정상적 방법으로 서비스를 방해하는 행위를 하여서는 안 됩니다.</p>
+<h3>제5조 (지식재산권)</h3>
+<p>서비스 및 콘텐츠(캐릭터, 문구, 계산 엔진 등)에 대한 지식재산권은 회사에 귀속됩니다.</p>
+<h3>제6조 (면책)</h3>
+<p>회사는 천재지변, 시스템 장애, 이용자의 귀책 등으로 인한 손해에 대해 책임을 지지 않으며, 콘텐츠의 정확성·신뢰성을 보증하지 않습니다.</p>
+<h3>제7조 (준거법 및 관할)</h3>
+<p>본 약관은 대한민국 법령에 따르며, 분쟁 발생 시 관할은 민사소송법에 따른 법원으로 합니다.</p>
+
+<h2>제2장 개인정보처리방침</h2>
+<h3>1. 수집하는 정보</h3>
+<ul><li>운세·작명·이름분석 이용 시: 생년월일·태어난 시간, 성별, (이름분석·작명 시) 이름 및 한자</li>
+<li>결제 시: 결제 정보는 토스페이먼츠가 처리하며, 회사는 카드번호 등 민감 결제정보를 저장하지 않습니다.</li>
+<li>서비스 이용 편의를 위한 익명 식별용 쿠키</li></ul>
+<h3>2. 이용 목적</h3>
+<p>입력하신 생년월일·이름 등은 <b>오직 해당 운세·작명·이름분석 결과를 생성하기 위해서만</b> 사용됩니다.</p>
+<h3>3. 보유 및 파기</h3>
+<p>본 서비스는 건별 처리 방식으로, 이용자가 입력한 <b>생년월일·이름 등 정보를 서버에 별도로 저장하지 않으며</b> 결과 생성 후 즉시 파기됩니다. 다만 전자상거래법 등 관련 법령에 따라 결제·거래 기록은 토스페이먼츠 및 관련 기관에 일정 기간(대금결제·재화공급 5년 등) 보관될 수 있습니다.</p>
+<h3>4. 제3자 제공 및 처리위탁</h3>
+<ul><li>해석 텍스트 생성: 입력값으로 산출된 사주·기문 근거가 AI 해석 생성을 위해 처리 위탁 업체(Anthropic)로 전송됩니다.</li>
+<li>결제 처리: 토스페이먼츠(주)</li></ul>
+<h3>5. 이용자의 권리</h3>
+<p>이용자는 관련 법령에 따라 개인정보의 열람·정정·삭제를 요구할 수 있습니다. (문의: %(이메일)s)</p>
+<h3>6. 개인정보 보호책임자</h3>
+<p>%(대표자)s (문의: %(이메일)s)</p>
+
+<h2>제3장 환불정책</h2>
+<ul><li>본 서비스의 유료 콘텐츠(운세·작명·이름분석 결과 등)는 <b>결제 즉시 생성·제공되는 디지털 콘텐츠</b>로서, 「전자상거래 등에서의 소비자보호에 관한 법률」 제17조 제2항에 따라 콘텐츠 제공이 개시된 경우 청약철회가 제한됩니다.</li>
+<li>다만 다음의 경우에는 전액 환불해 드립니다: ① 시스템 오류로 결과가 생성되지 않은 경우 ② 중복 결제 ③ 결제 금액 오류 ④ 콘텐츠가 표시·전송되지 않은 경우</li>
+<li>환불 문의는 %(이메일)s 로 결제 내역과 함께 접수해 주시면 확인 후 처리해 드립니다.</li></ul>
+
+<a class="home" href="/">← 점며든다로 돌아가기</a>
+</body></html>"""
+
+
+@app.route("/policy")
+def policy():
+    return render_template_string(POLICY_PAGE % BIZ)
 
 
 if __name__ == "__main__":
