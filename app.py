@@ -147,6 +147,9 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 .btn2{width:100%;padding:14px;border:3px solid var(--navy);border-radius:15px;background:var(--blue);color:#fff;font-family:'Black Han Sans';font-size:16px;box-shadow:3px 4px 0 var(--yellow);cursor:pointer}
 .rpt{padding:17px;white-space:pre-wrap;line-height:1.95;font-size:14.5px;color:#2e2148}.rpt b{color:var(--pink)}
 .tagf{padding:0 17px 15px;font-size:10.5px;color:#a99acb;font-family:'Jua'}
+#preopen{background:repeating-linear-gradient(45deg,#ffdf3d,#ffdf3d 12px,#241056 12px,#241056 24px);
+  color:#fff;text-align:center;font-family:'Jua';font-size:12.5px;padding:8px 10px;border-radius:12px;margin:6px 0 4px;
+  text-shadow:1px 1px 0 #241056,-1px -1px 0 #241056;border:2px solid #241056}
 .secdiv{display:flex;align-items:center;gap:10px;margin:26px 2px 12px;color:var(--navy)}
 .secdiv:before,.secdiv:after{content:"";flex:1;height:3px;background:repeating-linear-gradient(90deg,var(--navy) 0 7px,transparent 7px 12px)}
 .secdiv span{font-family:'Black Han Sans';font-size:16px;white-space:nowrap}
@@ -205,6 +208,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 
 <!-- 입력 -->
 <section class="screen" id="s-input">
+  <div id="preopen" style="display:none">🚧 오픈 준비 중이에요 · 곧 정식으로 만나요! (지금은 미리보기)</div>
   <div class="top"><div class="bal" id="bal">🔎 건당 990원</div>
     <div class="logo">점며든다</div>
     <div class="slo">내 인생, <em>어떻게 이겨?</em> 🪭</div></div>
@@ -289,6 +293,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 
 <script>
 const FIELDS=%%FIELDS%%;
+const PREOPEN=("%%PREOPEN%%"==="1");
 const ICON={overall:'🀄',wealth:'💰',career:'💼',love:'💕',life:'🌊',health:'🩺',yearly:'⚔️',today:'📅'};
 const CHAR={overall:'yubi',wealth:'jojo',career:'gwanu',love:'juyu',life:'samaui',health:'hwata',yearly:'jangbi',today:'gongmyeong'};
 let sel='wealth';
@@ -322,7 +327,8 @@ setTimeout(()=>{if(introLeft)return;typing();setTimeout(nextMsg,900);},500);
 function toInput(){introLeft=true;
   document.getElementById('s-intro').classList.remove('on');
   const cw=document.getElementById('ctaw');cw.classList.remove('show');cw.style.display='none';
-  document.getElementById('s-input').classList.add('on');scrollTo(0,0);refreshBal();loadPop();}
+  document.getElementById('s-input').classList.add('on');scrollTo(0,0);refreshBal();loadPop();
+  if(PREOPEN){var pb=document.getElementById('preopen');if(pb)pb.style.display='block';}}
 
 /* ── 입력 폼 ── */
 const fbox=document.getElementById('fields');
@@ -357,6 +363,7 @@ window._unlocks=window._unlocks||{};
 function refreshBal(){const b=document.getElementById('bal');if(b)b.textContent='🔎 건당 990원';}
 function payFor(item,input){
   if(window._unlocks&&window._unlocks[item]){dispatchUnlock(item,input,window._unlocks[item]);return;}
+  if(PREOPEN){alert('🚧 아직 오픈 준비 중이에요!\\n조금만 기다려 주세요 🙏 곧 정식으로 만나요!');return;}
   sessionStorage.setItem('pending',JSON.stringify({item:item,input:input}));location.href='/pay?item='+item;
 }
 
@@ -641,7 +648,9 @@ def index():
     import json
     from flask import make_response
     labels = {k: v["name"] for k, v in FIELDS.items()}
-    html = render_template_string(PAGE.replace("%%FIELDS%%", json.dumps(labels, ensure_ascii=False)))
+    preopen = "1" if str(TOSS_CLIENT_KEY).startswith("test") else "0"   # 테스트키=오픈 준비중
+    html = render_template_string(PAGE.replace("%%FIELDS%%", json.dumps(labels, ensure_ascii=False))
+                                  .replace("%%PREOPEN%%", preopen))
     resp = make_response(html)
     if not current_user():   # 로그인 없이, 조용히 게스트 지갑 발급 (첫 리포트 무료)
         uid = "guest_" + uuid.uuid4().hex[:10]
