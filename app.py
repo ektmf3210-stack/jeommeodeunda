@@ -150,6 +150,12 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 #preopen{background:repeating-linear-gradient(45deg,#ffdf3d,#ffdf3d 12px,#241056 12px,#241056 24px);
   color:#fff;text-align:center;font-family:'Jua';font-size:12.5px;padding:8px 10px;border-radius:12px;margin:6px 0 4px;
   text-shadow:1px 1px 0 #241056,-1px -1px 0 #241056;border:2px solid #241056}
+.preopen-big{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,#ff2e86,#ffdf3d,#2b2bff);
+  color:#fff;text-align:center;font-family:'Black Han Sans';font-size:21px;line-height:1.35;padding:16px 12px;
+  border-radius:0 0 20px 20px;border:3px solid #241056;box-shadow:0 5px 0 #241056;
+  text-shadow:2px 2px 0 #241056;animation:poblink 1.6s ease-in-out infinite}
+.preopen-big span{display:block;font-family:'Jua';font-size:13px;margin-top:5px;text-shadow:1px 1px 0 #241056}
+@keyframes poblink{50%{filter:brightness(1.15)}}
 .secdiv{display:flex;align-items:center;gap:10px;margin:26px 2px 12px;color:var(--navy)}
 .secdiv:before,.secdiv:after{content:"";flex:1;height:3px;background:repeating-linear-gradient(90deg,var(--navy) 0 7px,transparent 7px 12px)}
 .secdiv span{font-family:'Black Han Sans';font-size:16px;white-space:nowrap}
@@ -196,6 +202,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 
 <!-- 인트로 채팅 -->
 <section class="screen on" id="s-intro">
+  <div class="preopen-banner preopen-big" style="display:none">🚧 오픈 준비 중이에요<br><span>곧 정식으로 만나요! 지금은 미리보기예요 🙏</span></div>
   <button class="skip" onclick="toInput()">건너뛰기 →</button>
   <span class="spk" style="left:18px;top:120px;color:#ff2e86;font-size:18px">✦</span>
   <span class="spk" style="right:20px;top:175px;color:#2b2bff;font-size:18px">★</span>
@@ -208,7 +215,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 
 <!-- 입력 -->
 <section class="screen" id="s-input">
-  <div id="preopen" style="display:none">🚧 오픈 준비 중이에요 · 곧 정식으로 만나요! (지금은 미리보기)</div>
+  <div id="preopen" class="preopen-banner" style="display:none">🚧 오픈 준비 중이에요 · 곧 정식으로 만나요! (지금은 미리보기)</div>
   <div class="top"><div class="bal" id="bal">🔎 건당 990원</div>
     <div class="logo">점며든다</div>
     <div class="slo">내 인생, <em>어떻게 이겨?</em> 🪭</div></div>
@@ -294,6 +301,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 <script>
 const FIELDS=%%FIELDS%%;
 const PREOPEN=("%%PREOPEN%%"==="1");
+if(PREOPEN){setTimeout(()=>document.querySelectorAll('.preopen-banner').forEach(e=>e.style.display='block'),0);}
 const ICON={overall:'🀄',wealth:'💰',career:'💼',love:'💕',life:'🌊',health:'🩺',yearly:'⚔️',today:'📅'};
 const CHAR={overall:'yubi',wealth:'jojo',career:'gwanu',love:'juyu',life:'samaui',health:'hwata',yearly:'jangbi',today:'gongmyeong'};
 let sel='wealth';
